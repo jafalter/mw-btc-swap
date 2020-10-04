@@ -1,11 +1,12 @@
 use crate::swap::swap_types::SwapState;
 use crate::enums::Currency;
+use crate::enums::SwapStatus;
 
 pub trait Command {
-    fn execute(&self) -> Result<SwapState, String>;
+    fn execute(&self) -> Result<SwapState, &'static str>;
 }
 
-struct Offer {
+pub struct Offer {
     from : Currency,
     to : Currency,
     from_amount : u32,
@@ -16,7 +17,7 @@ struct Offer {
 }
 
 impl Offer {
-    fn new(from : Currency, to : Currency, from_amount : u32, to_amount : u32, timeout_minutes: u32) -> Offer {
+    pub fn new(from : Currency, to : Currency, from_amount : u32, to_amount : u32, timeout_minutes: u32) -> Offer {
         let mut exchange_rate = 1.0;
         if from_amount > to_amount {
             exchange_rate = (from_amount as f32) / (to_amount as f32) ;
@@ -38,7 +39,10 @@ impl Offer {
 }
 
 impl Command for Offer {
-    fn execute(&self) -> Result<SwapState, String> {
-
+    fn execute(&self) -> Result<SwapState, &'static str> {
+        println!("Executing offer command");
+        Ok(SwapState{
+            status : SwapStatus::INITIALIZED
+        })
     }
 }

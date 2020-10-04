@@ -6,6 +6,8 @@ mod commands;
 mod enums;
 mod swap;
 
+use commands::cmd_types::Command;
+
 fn usage() {
     println!("usage: offer|accept|redeem options");
 }
@@ -19,10 +21,11 @@ fn main() {
     
     let args: Vec<String> = env::args().collect();
 
-    if args.len() == 0 {
+    if args.len() <= 1 {
         usage();
     }
     else {
-        commands::
+        let cmd = commands::parser::parse_arguments(args).unwrap();
+        let state = cmd.execute().unwrap();
     }
 }

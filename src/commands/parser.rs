@@ -1,21 +1,18 @@
 
 // Parse arguments parsed 
 use crate::commands::cmd_types::Command;
+use crate::commands::cmd_types::Offer;
+use crate::enums::Currency;
 
-pub fn parse_arguments(args: Vec<String>) -> Result<impl Command, String> {
-    let cmd : String = args[0].to_string().to_uppercase();
-    match cmd {
+pub fn parse_arguments(args: Vec<String>) -> Result<impl Command, &'static str> {
+    let cmd : String = args[1].to_uppercase();
+    println!("Command parsed {}", cmd);
+    match cmd.as_str() {
         "OFFER" => {
-            println!("Offer command parsed");
+            Ok(Offer::new(Currency::BTC, Currency::GRIN, 0, 0, 0))
         },
-        "ACCEPT" => {
-            println!("Accept command parsed");
-        }
-        "REDEEM" => {
-            println!("Redeem command parsed");
-        }
         _ => {
-            Err("Not a valid command");
+            Err("Unsupported Command provided")
         }
     }
 }
