@@ -1,10 +1,13 @@
+use std::net::{TcpListener, TcpStream};
+
 use crate::swap::swap_types::SwapState;
 use crate::enums::Currency;
 use crate::enums::SwapStatus;
 use crate::constants;
+use crate::settings::Settings;
 
 pub trait Command {
-    fn execute(&self) -> Result<SwapState, &'static str>;
+    fn execute(&self, settings : Settings) -> Result<SwapState, &'static str>;
 }
 
 pub struct Offer {
@@ -42,10 +45,16 @@ impl Offer {
 }
 
 impl Command for Offer {
-    fn execute(&self) -> Result<SwapState, &'static str> {
+    fn execute(&self, settings : Settings) -> Result<SwapState, &'static str> {
         println!("Executing offer command");
         // Start TCP server
-        // Output a token with which a peer can connect
+        // Output a token with which a peer can connect with
+        let tcpaddr : String = format!("{}:{}", settings.tcp_addr, settings.tcp_port);
+        println!("Starting TCP Listener on {}", tcpaddr);
+        let listener = TcpListener::bind(tcpaddr).unwrap(); 
+        for stream in listener.incoming() {
+            println!("A client connected");
+        }
         Ok(SwapState{
             status : SwapStatus::INITIALIZED
         })
