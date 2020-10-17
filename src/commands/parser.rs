@@ -1,7 +1,7 @@
 
 // Parse arguments parsed 
 use crate::commands::cmd_types::Command;
-use crate::commands::cmd_types::Offer;
+use crate::commands::cmd_types::Init;
 use crate::enums::Currency;
 use crate::enums::parse_currency_from_string;
 use crate::constants;
@@ -12,7 +12,7 @@ use clap::{
 
 pub fn parse_arguments(matches: ArgMatches) -> Result<impl Command, &'static str> {
     match matches.subcommand() {
-        ("offer", Some(args)) => {
+        ("init", Some(args)) => {
         let from_currency_arg = String::from(args.value_of("from-currency").unwrap());
         let to_currency_arg = String::from(args.value_of("to-currency").unwrap());
         let from_amount_arg = String::from(args.value_of("from-amount").unwrap());
@@ -40,7 +40,7 @@ pub fn parse_arguments(matches: ArgMatches) -> Result<impl Command, &'static str
             panic!("Timeout too high! Max timeout is 5 days");
         }
 
-        Ok(Offer::new(from_currency, to_currency, from_amount, to_amount, timeout_min))
+        Ok(Init::new(from_currency, to_currency, from_amount, to_amount, timeout_min))
         },
         _ => Err("Invalid command supplied")
     }

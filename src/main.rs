@@ -6,6 +6,8 @@ mod commands;
 mod enums;
 mod swap;
 mod constants;
+mod grin;
+mod bitcoin;
 
 use clap::{
     Arg,
@@ -16,7 +18,7 @@ use clap::{
 use commands::cmd_types::Command;
 
 fn usage() {
-    println!("usage: offer|accept|redeem options");
+    println!("usage: init|offer|accept|redeem options");
 }
 
 fn main() {
@@ -29,8 +31,8 @@ fn main() {
     let matches = App::new("Grin Bitcoin Swaps")
                         .version("1.0")
                         .author("Jakob Abfalter <jakobabfalter@gmail.com>")
-                        .subcommand(SubCommand::with_name("offer")
-                        .about("Create a new atomic swap offering")
+                        .subcommand(SubCommand::with_name("init")
+                        .about("Create a new atomic swap slate which can then be offered")
                         .arg(Arg::with_name("from-currency")
                             .long("from-currency")
                             .required(true)
