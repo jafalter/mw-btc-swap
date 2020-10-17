@@ -1,7 +1,5 @@
 use crate::swap::swap_types::Meta;
 use crate::swap::swap_types::MWPub;
-use std::net::{TcpListener, TcpStream};
-
 use crate::swap::swap_types::SwapSlate;
 use crate::swap::swap_types::SwapSlatePub;
 use crate::swap::swap_types::SwapSlatePriv;
@@ -12,6 +10,8 @@ use crate::enums::Currency;
 use crate::enums::SwapStatus;
 use crate::constants;
 use crate::settings::Settings;
+use rand::Rng;
+use std::net::{TcpListener, TcpStream};
 
 pub trait Command {
     fn execute(&self, settings : Settings) -> Result<SwapSlate, &'static str>;
@@ -58,8 +58,10 @@ impl Init {
 impl Command for Init {
     fn execute(&self, settings : Settings) -> Result<SwapSlate, &'static str> {
         println!("Executing init command");
+        let mut rng = rand::thread_rng();
 
         // Create the initial Swapslate
+        let id : u64 = rng.gen();
         if self.from == Currency::BTC && self.to == Currency::GRIN || self.from == Currency::GRIN && self.to == Currency::BTC {
             // Private parts are unset for now
             let mwpriv = MWPriv{
@@ -99,6 +101,7 @@ impl Command for Init {
                 meta : meta
             };
             Ok(SwapSlate{
+                id : id,
                 pubSlate : pubSlate,
                 privSlate : privSlate
             })
@@ -109,6 +112,7 @@ impl Command for Init {
     }
 }
 
+/*
 impl Command for Offer {
     fn execute(&self, settings : Settings) {
         println!("Executing offer command");
@@ -122,3 +126,4 @@ impl Command for Offer {
         }
     } 
 }
+*/

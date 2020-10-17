@@ -6,6 +6,7 @@ pub struct Settings {
     pub mw_node_url: String,
     pub tcp_addr: String,
     pub tcp_port : String,
+    pub slate_directory : String,
 }
 
 impl Settings {

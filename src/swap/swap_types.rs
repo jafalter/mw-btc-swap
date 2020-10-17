@@ -3,6 +3,7 @@ use crate::grin::grin_types::MWCoin;
 use crate::bitcoin::bitcoin_types::BTCInput;
 
 pub struct SwapSlate {
+    pub id : u64,
     pub pubSlate : SwapSlatePub,
     pub privSlate : SwapSlatePriv
 }
