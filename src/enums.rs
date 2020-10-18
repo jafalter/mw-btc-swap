@@ -1,3 +1,5 @@
+use serde::{Serialize, Deserialize};
+
 #[derive(PartialEq)]
 pub enum Currency {
     BTC,
@@ -16,10 +18,16 @@ pub fn parse_currency_from_string(cur : String) -> Currency {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Serialize, Deserialize)]
 pub enum SwapStatus {
     INITIALIZED,
     SETUP,
     EXECUTING,
     FINISHED
+}
+
+#[derive(PartialEq, Serialize, Deserialize)]
+pub enum SwapType {
+    OFFERED,
+    REQUESTED
 }

@@ -1,16 +1,21 @@
 
 // Parse arguments parsed 
+use crate::commands::cmd_types::Listen;
+use crate::commands::cmd_types::ImportGrin;
+use crate::commands::cmd_types::ImportBtc;
 use crate::commands::cmd_types::Command;
 use crate::commands::cmd_types::Init;
 use crate::enums::Currency;
 use crate::enums::parse_currency_from_string;
 use crate::constants;
 
+use std::u32;
+
 use clap::{
     ArgMatches
 };
 
-pub fn parse_arguments(matches: ArgMatches) -> Result<impl Command, &'static str> {
+pub fn parse_arguments(matches: ArgMatches) -> Result<Box<dyn Command>, &'static str> {
     match matches.subcommand() {
         ("init", Some(args)) => {
         let from_currency_arg = String::from(args.value_of("from-currency").unwrap());
@@ -40,8 +45,46 @@ pub fn parse_arguments(matches: ArgMatches) -> Result<impl Command, &'static str
             panic!("Timeout too high! Max timeout is 5 days");
         }
 
-        Ok(Init::new(from_currency, to_currency, from_amount, to_amount, timeout_min))
+        Ok(Box::new(Init::new(from_currency, to_currency, from_amount, to_amount, timeout_min)))
         },
+        ("import", Some(args)) => {
+            match args.subcommand() {
+                ("btc", Some(subargs)) => {
+                    let swapid_arg = String::from(subargs.value_of("swapid").unwrap());
+                    let txid = String::from(subargs.value_of("txid").unwrap());
+                    let vout_arg = String::from(subargs.value_of("vout").unwrap());
+                    let value_arg = String::from(subargs.value_of("value").unwrap());
+                    let secret = String::from(subargs.value_of("secret").unwrap());
+                    
+                    // Parse arguments
+                    let swapid : u64 = swapid_arg.parse::<u64>().unwrap();
+                    let vout : u16 = vout_arg.parse::<u16>().unwrap();
+                    let value : u64 = value_arg.parse::<u64>().unwrap();
+
+                    Ok(Box::new(ImportBtc::new(swapid, txid, vout, value, secret)))
+                },
+                ("grin", Some(subargs)) => {
+                    let swapid_arg = String::from(subargs.value_of("swapid").unwrap());
+                    let commitment = String::from(subargs.value_of("commitment").unwrap());
+                    let blinding_factor = String::from(subargs.value_of("blinding_factor").unwrap());
+                    let value_arg = String::from(subargs.value_of("value").unwrap());
+
+                    // Parse arguments
+                    let swapid : u64 = swapid_arg.parse::<u64>().unwrap();
+                    let value : u64 = value_arg.parse::<u64>().unwrap();
+
+                    Ok(Box::new(ImportGrin::new(swapid, commitment, blinding_factor, value)))
+                },
+                _ => Err ("Invalid subcommand for import supplied")
+            }
+        },
+        ("listen", Some(args)) => {
+            let swapid_arg = String::from(args.value_of("swapid").unwrap());
+
+            let swapid : u64 = swapid_arg.parse::<u64>().unwrap();
+
+            Ok(Box::new(Listen::new(swapid)))
+        }
         _ => Err("Invalid command supplied")
     }
 }
