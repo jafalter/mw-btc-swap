@@ -3,7 +3,10 @@ use serde::{Serialize, Deserialize};
 #[derive(Serialize, Deserialize)]
 pub struct Settings {
     pub btc_node_url: String,
-    pub mw_node_url: String
+    pub mw_node_url: String,
+    pub tcp_addr: String,
+    pub tcp_port : String,
+    pub slate_directory : String,
 }
 
 impl Settings {

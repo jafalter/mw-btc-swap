@@ -1,48 +1,223 @@
-use crate::swap::swap_types::SwapState;
+use crate::grin::grin_types::MWCoin;
+use crate::bitcoin::bitcoin_types::BTCInput;
+use crate::swap::slate::read_slate_from_disk;
+use crate::swap::swap_types::Meta;
+use crate::swap::swap_types::MWPub;
+use crate::swap::swap_types::SwapSlate;
+use crate::swap::swap_types::SwapSlatePub;
+use crate::swap::swap_types::SwapSlatePriv;
+use crate::swap::swap_types::MWPriv;
+use crate::swap::swap_types::BTCPriv;
+use crate::swap::swap_types::BTCPub;
 use crate::enums::Currency;
 use crate::enums::SwapStatus;
+use crate::constants;
+use crate::settings::Settings;
+use crate::enums::SwapType;
+use rand::Rng;
+use std::net::{TcpListener, TcpStream};
 
 pub trait Command {
-    fn execute(&self) -> Result<SwapState, &'static str>;
+    fn execute(&self, settings : Settings) -> Result<SwapSlate, &'static str>;
 }
 
-pub struct Offer {
+/// The Init command will create a new Atomic Swap slate
+/// 
+pub struct Init {
     from : Currency,
     to : Currency,
-    from_amount : u32,
-    to_amount : u32,
+    from_amount : u64,
+    to_amount : u64,
     timeout_btc : u32,
-    timoeut_grin : u32,
-    exchange_rate : f32
+    timeout_grin : u32
 }
 
-impl Offer {
-    pub fn new(from : Currency, to : Currency, from_amount : u32, to_amount : u32, timeout_minutes: u32) -> Offer {
-        let mut exchange_rate = 1.0;
-        if from_amount > to_amount {
-            exchange_rate = (from_amount as f32) / (to_amount as f32) ;
-        }
-        else if to_amount > from_amount {
-            exchange_rate = (to_amount as f32) / (from_amount as f32);
-        }
+pub struct ImportBtc {
+    swpid : u64,
+    txid : String,
+    vout : u16,
+    value : u64,
+    secret: String
+}
 
-        Offer {
+pub struct ImportGrin {
+    swpid : u64,
+    commitment : String,
+    blinding_factor : String,
+    value : u64
+}
+
+pub struct Listen {
+    swapid : u64
+}
+
+impl ImportBtc {
+    pub fn new(swpid : u64, txid : String, vout : u16, value : u64, secret : String) -> ImportBtc {
+        ImportBtc {
+            swpid : swpid,
+            txid : txid,
+            vout : vout,
+            value : value,
+            secret : secret
+        }
+    }
+}
+
+impl ImportGrin {
+    pub fn new(swpid : u64, commitment : String, blinding_factor : String, value : u64) -> ImportGrin {
+        ImportGrin {
+            swpid : swpid,
+            commitment : commitment,
+            blinding_factor : blinding_factor,
+            value : value
+        }
+    }
+}
+
+impl Init {
+    pub fn new(from : Currency, to : Currency, from_amount : u64, to_amount : u64, timeout_minutes: u32) -> Init {
+        let timeout_grin : u32 = timeout_minutes / constants::GRIN_BLOCK_TIME;
+        let timeout_btc : u32 = timeout_minutes / constants::BTC_BLOCK_TIME;
+
+        Init {
             from : from,
             to: to,
             from_amount: from_amount,
             to_amount: to_amount,
-            timeout_btc : 0, // TODO correct
-            timoeut_grin : 0,  // TODO correct
-            exchange_rate : exchange_rate
+            timeout_btc : timeout_btc,
+            timeout_grin : timeout_grin
         }
     }
 }
 
-impl Command for Offer {
-    fn execute(&self) -> Result<SwapState, &'static str> {
-        println!("Executing offer command");
-        Ok(SwapState{
-            status : SwapStatus::INITIALIZED
-        })
+impl Listen {
+    pub fn new(swapid : u64) -> Listen {
+        Listen {
+            swapid : swapid
+        }
     }
+}
+
+impl Command for Init {
+    fn execute(&self, settings : Settings) -> Result<SwapSlate, &'static str> {
+        println!("Executing init command");
+        let mut rng = rand::thread_rng();
+
+        // Create the initial Swapslate
+        let id : u64 = rng.gen();
+        println!("Swap id: {}", id);
+        if self.from == Currency::BTC && self.to == Currency::GRIN || self.from == Currency::GRIN && self.to == Currency::BTC {
+            // Private parts are unset for now
+            let mwpriv = MWPriv{
+                inputs : Vec::new(),
+                partial_key : 0
+            };        
+            let btcpriv = BTCPriv{
+                inputs : Vec::new(),
+                witness : 0
+            };
+            let prv_slate = SwapSlatePriv{
+                mw : mwpriv,
+                btc : btcpriv
+            };
+
+            let btc_amount = if Currency::BTC == self.from { self.from_amount } else { self.to_amount };
+            let mw_amount = if Currency::GRIN == self.from { self.from_amount } else { self.to_amount };
+
+            // Public parts set depening on from to which currency is swapped
+            let btcpub = BTCPub {
+                amount : btc_amount,
+                timelock : self.timeout_btc,
+                swap_type : if self.from == Currency::BTC { SwapType::OFFERED } else { SwapType::REQUESTED },
+                stmt : None
+            };
+            let mwpub = MWPub {
+                amount : mw_amount,
+                timelock : self.timeout_grin,
+                swap_type : if self.from == Currency::GRIN { SwapType::OFFERED } else { SwapType::REQUESTED }
+            };
+            let meta = Meta {
+                server : settings.tcp_addr,
+                port : settings.tcp_port
+            };
+            let pub_slate = SwapSlatePub {
+                status : SwapStatus::INITIALIZED,
+                mw : mwpub,
+                btc : btcpub,
+                meta : meta
+            };
+            Ok(SwapSlate{
+                id : id,
+                pub_slate : pub_slate,
+                prv_slate : prv_slate
+            })
+        }
+        else {
+            Err("Swapped currency setup not supported")
+        }
+    }
+}
+
+impl Command for ImportBtc {
+    fn execute(&self, settings: Settings) -> Result<SwapSlate, &'static str> {
+        let mut slate : SwapSlate = read_slate_from_disk(self.swpid, settings.slate_directory.clone()).expect("Failed to read SwapSlate");
+        slate.prv_slate.btc.inputs.push(BTCInput{
+            txid : self.txid.clone(),
+            vout : self.vout,
+            value : self.value,
+            secret : self.secret.clone()
+        });
+        Ok(slate)
+    }
+}
+
+impl Command for ImportGrin {
+    fn execute(&self, settings : Settings) -> Result<SwapSlate, &'static str> {
+        let mut slate : SwapSlate = read_slate_from_disk(self.swpid, settings.slate_directory.clone()).expect("Failed to read SwapSlate from file");
+        slate.prv_slate.mw.inputs.push(MWCoin{
+            commitment : self.commitment.clone(),
+            blinding_factor : self.blinding_factor.clone(),
+            value : self.value
+        });
+        Ok(slate)
+    }
+}
+
+impl Command for Listen {
+    fn execute(&self, settings : Settings) -> Result<SwapSlate, &'static str> {
+
+        let swp_slate = read_slate_from_disk(self.swapid, settings.slate_directory.clone()).expect("Failed to read SwapSlate from file");
+
+        // Check if we have enough value
+        let offered_currency = if swp_slate.pub_slate.mw.swap_type == SwapType::OFFERED { Currency::GRIN } else { Currency::BTC };
+        let from_amount : u64 = if offered_currency == Currency::GRIN { swp_slate.pub_slate.mw.amount } else { swp_slate.pub_slate.btc.amount };
+        let mut value : u64 = 0;
+        if offered_currency == Currency::GRIN {
+            for inp in swp_slate.prv_slate.mw.inputs {
+                value = value + inp.value;
+            }
+        
+        }
+        else {
+            // Offered Bitcoin
+            for inp in swp_slate.prv_slate.btc.inputs {
+                value = value + inp.value
+            }
+        }
+        if value < from_amount {
+            Err("Not enough value in inputs, please import more Coins")
+        }
+        else {    
+            // Start TCP server
+            let tcpaddr : String = format!("{}:{}", settings.tcp_addr, settings.tcp_port);
+            println!("Starting TCP Listener on {}", tcpaddr);
+            println!("Please share {}.pub.json with a interested peer. Never share your private file", self.swapid);
+            let listener = TcpListener::bind(tcpaddr).unwrap(); 
+            for stream in listener.incoming() {
+                println!("A client connected");
+                // TODO Lets swap
+            };
+            Err("Not implemented")
+        }
+    } 
 }
