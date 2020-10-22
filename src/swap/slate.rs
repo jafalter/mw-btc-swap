@@ -1,3 +1,5 @@
+use crate::swap::swap_types::BTCPriv;
+use crate::swap::swap_types::MWPriv;
 use crate::swap::swap_types::SwapSlatePriv;
 use crate::swap::swap_types::SwapSlatePub;
 use std::fs::File;
@@ -13,7 +15,7 @@ use crate::SwapSlate;
 /// * `directory` - The directory in which the slate files are stored (can be configured in settings.json)
 /// * `wrt_priv` - If the function should write the private file
 /// * `wrt_pub` - If the function should write the public file
-pub fn write_slate_to_disk(slate : SwapSlate, directory : String, wrt_priv: bool, wrt_pub: bool) {
+pub fn write_slate_to_disk(slate : &SwapSlate, directory : String, wrt_priv: bool, wrt_pub: bool) {
     let pv_slate_path = get_slate_path(slate.id, directory.clone(), false);
     let pb_slate_path = get_slate_path(slate.id, directory.clone(), true);
 
@@ -63,6 +65,45 @@ pub fn read_slate_from_disk(id : u64, directory : String) -> Result<SwapSlate, &
             pub_slate : pub_slate,
             prv_slate : prv_slate
         })
+    }
+}
+
+/// Create a fresh private slate file for a swap identified by the id
+/// 
+/// # Arguments
+/// 
+/// * `id` the id of the Atomic Swap
+/// * `directory` the directory in which the slate files are store. (Can be configured in settions.json)
+pub fn create_priv_from_pub(id : u64, directory : String) -> Result<SwapSlate, &'static str> {
+    let pb_slate_path = get_slate_path(id, directory.clone(), true);
+
+    if Path::new(&pb_slate_path).exists() == false {
+        Err("Unable to create private slate file, as the public file doesn't exist")
+    }
+    else {
+        let pub_contents = fs::read_to_string(pb_slate_path).expect("Error during reading of pub file");
+        let pub_slate : SwapSlatePub = serde_json::from_str(&pub_contents).unwrap();
+
+        let mwpriv = MWPriv{
+            inputs : Vec::new(),
+            partial_key : 0
+        };        
+        let btcpriv = BTCPriv{
+            inputs : Vec::new(),
+            witness : 0
+        };
+        let prv_slate = SwapSlatePriv{
+            mw : mwpriv,
+            btc : btcpriv
+        };
+        let slate : SwapSlate = SwapSlate {
+            id : id,
+            pub_slate : pub_slate,
+            prv_slate : prv_slate
+        };
+        write_slate_to_disk(&slate, directory, true, false);
+
+        Ok(slate)
     }
 }
 

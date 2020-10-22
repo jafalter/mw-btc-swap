@@ -1,9 +1,9 @@
 # mw-btc-swap
 Implementation for my masters thesis
 
-## commands
+# commands
 
-### init
+## init
 
 Creates a new Atomic Swap Offer. Need to specifc the source and target currency and the swap amounts.
 It will create a private and public slate file in your slate directory (configurable in settings.json).
@@ -104,3 +104,18 @@ The command takes the following required arguments:
 The example command would then look like:
 
 `./mw-btc-swaps listen --swapid 8715159615153475876`
+
+## accept
+
+The accept command will take the public file provided by a peer and create the private file for it.
+After running it the peer has to import the respective funds into the private swap file using the import command
+The command takes the following mandatory argument:
+
+--swapid <integer> the id of the atomic swap for which you have received the public file. (Make sure the file was placed into the correct directory)
+
+## execute
+
+The execute command will connect to the peer's TCP server and start the Atomic Swap protocol for which messages will be exchanged via TCP
+The command takes the following mandatory argument:
+
+--swapid <integer> the id of the atomic swap which we want to start
