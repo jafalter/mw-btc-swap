@@ -1,0 +1,20 @@
+version: "3.8"
+services:
+    alice:
+        build: .
+        volumes: 
+            - "alice-slates:/slates"
+        environment: 
+            - SETTINGS_TCP_ADDR=alice
+            - SETTINGS_SLATE_DIRECTORY=/slates
+    bob:
+        build: .
+        volumes: 
+            - "bob-slates:/slates"
+        environment: 
+            - SETTINGS_TCP_ADDR=bob
+            - SETTINGS_SLATE_DIRECTORY=/slates
+
+volumes: 
+    alice-slates:
+    bob-slates:
