@@ -16,15 +16,40 @@ use clap::{
     SubCommand
 };
 
+use settings::Settings;
+
 fn usage() {
     println!("usage: init|offer|accept|redeem options");
+}
+
+/// Setting variables can be overwritten with environment variables
+/// these are read in this function.
+/// to overwrite a variable pass it into the ENV like
+/// SETTINGS_{VAR_NAME_UPPERCASE}=value
+/// for example:
+/// SETTINGS_TCP_ADDR=alice
+fn overwrite_settings_with_env(settings : &Settings) -> Settings {
+    let btc_node_url = env::var("SETTINGS_BTC_NODE_URL").unwrap_or(settings.btc_node_url.clone());
+    let mw_node_url = env::var("SETTINGS_MW_NODE_URL").unwrap_or(settings.mw_node_url.clone());
+    let tcp_addr = env::var("SETTINGS_TCP_ADDR").unwrap_or(settings.tcp_addr.clone());
+    let tcp_port = env::var("SETTINGS_TCP_PORT").unwrap_or(settings.tcp_port.clone());
+    let slate_directory = env::var("SETTINGS_SLATE_DIRECTORY").unwrap_or(settings.slate_directory.clone());
+
+    Settings{
+        btc_node_url : btc_node_url,
+        mw_node_url : mw_node_url,
+        tcp_addr : tcp_addr,
+        tcp_port : tcp_port,
+        slate_directory : slate_directory
+    }
 }
 
 fn main() {
     let contents = fs::read_to_string("config/settings.json")
         .expect("Something went wrong reading the settings file");
 
-    let settings = settings::Settings::parse_json_string(&contents);
+    let read_settings = settings::Settings::parse_json_string(&contents);
+    let settings = overwrite_settings_with_env(&read_settings);
     println!("BTC Client: {}, Grin Client: {}", settings.btc_node_url, settings.mw_node_url);
     
     let matches = App::new("Grin Bitcoin Swaps")
