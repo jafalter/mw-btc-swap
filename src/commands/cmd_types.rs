@@ -1,3 +1,6 @@
+use crate::net::tcp::write_to_stream;
+use crate::net::tcp::read_from_stream;
+use crate::swap::slate::get_slate_checksum;
 use crate::swap::slate::create_priv_from_pub;
 use crate::grin::grin_types::MWCoin;
 use crate::bitcoin::bitcoin_types::BTCInput;
@@ -241,7 +244,11 @@ impl Command for Listen {
             let listener = TcpListener::bind(tcpaddr).unwrap(); 
             for stream in listener.incoming() {
                 println!("A client connected");
-                // TODO Lets swap
+                let msg = read_from_stream(stream.unwrap());
+                let checksum = get_slate_checksum(swp_slate.id, settings.slate_directory.clone()).unwrap();
+                if msg.eq_ignore_ascii_case(&checksum) {
+                    println!("Swap Checksum matched")
+                }
             };
             Err("Not implemented")
         }
@@ -259,11 +266,13 @@ impl Command for Accept {
 
 impl Command for Execute {
     fn execute(&self, settings : Settings) -> Result<SwapSlate, &'static str> {
-        let slate : SwapSlate = read_slate_from_disk(self.swapid, settings.slate_directory).expect("Unable to read slate files from disk");
+        let slate : SwapSlate = read_slate_from_disk(self.swapid, settings.slate_directory.clone()).expect("Unable to read slate files from disk");
         let mut stream : TcpStream = TcpStream::connect(format!("{}:{}", slate.pub_slate.meta.server, slate.pub_slate.meta.port))
             .expect("Failed to connect to peer via TCP");
-        let mut buffer = [0; 512];
-        stream.write(&buffer);
+        // first message exchanged is a hash of the pub slate file
+        println!("Connected to peer");
+        let checksum = get_slate_checksum(slate.id, settings.slate_directory.clone()).unwrap();
+        write_to_stream(stream, &checksum);
 
         Err("Not implemented")
     }

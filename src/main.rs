@@ -9,6 +9,7 @@ mod swap;
 mod constants;
 mod grin;
 mod bitcoin;
+mod net;
 
 use clap::{
     Arg,

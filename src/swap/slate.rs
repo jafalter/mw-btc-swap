@@ -6,6 +6,7 @@ use std::fs::File;
 use std::fs;
 use std::path::Path;
 use crate::SwapSlate;
+use sha2::{Sha256, Digest};
 
 /// Write Atomic Swap slate into files on disk
 /// 
@@ -65,6 +66,21 @@ pub fn read_slate_from_disk(id : u64, directory : String) -> Result<SwapSlate, &
             pub_slate : pub_slate,
             prv_slate : prv_slate
         })
+    }
+}
+
+pub fn get_slate_checksum(id : u64, directory : String) -> Result<String, &'static str> {
+    let pb_slate_path = get_slate_path(id, directory.clone(), true);
+
+    if Path::new(&pb_slate_path).exists() == false {
+        Err("Unable to read slate files, as the files don't exist")
+    }
+    else {
+        let pub_contents = fs::read_to_string(pb_slate_path).expect("Error during reading of pub file");
+        let mut hasher = Sha256::new();
+        hasher.update(pub_contents);
+        let bytes = hasher.finalize();
+        Ok(format!("{:x}", bytes))
     }
 }
 
