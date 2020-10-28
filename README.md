@@ -29,7 +29,7 @@ He chooses a 10 hour timeout, meaning that if the swap (once started) does not c
 
 The call on the command line looks like this:
 
-`./mw-btc-swaps init --from-amount 3566000 --from-currency BTC --to-amount 5000000000000 --to-currency GRIN --timeout 600`
+`./mw-btc-swap init --from-amount 3566000 --from-currency BTC --to-amount 5000000000000 --to-currency GRIN --timeout 600`
 
 The program created a new swap with the id `8715159615153475876` and the files `8715159615153475876.prv.json`, `8715159615153475876.pub.json`
 
@@ -67,7 +67,7 @@ To import grin coins one has to provide the following required arguments
 In our previous example Bob now would have to import UTXOs of minimum value `3566000` sats in order to start offering the swap.
 Lets say Bob has `0.27338479 BTC` stored in a transaction with the id `ac3947090566ffa1780caa0348ea1638a2b0bc5b4ca7f37f5822fadd9f37ae58` as the second output to vout has to be `1` (counting from 0). The private key to the output is `E9873D79C6D87DC0FB6A5778633389F4453213303DA61F20BD67FC233AA33262` so the import command would look like:
 
-`./mw-btc-swaps import btc --swapid 8715159615153475876 --secret 0xE9873D79C6D87DC0FB6A5778633389F4453213303DA61F20BD67FC233AA33262 --txid ac3947090566ffa1780caa0348ea1638a2b0bc5b4ca7f37f5822fadd9f37ae58 --vout 1 --value 27338479`
+`./mw-btc-swap import btc --swapid 8715159615153475876 --secret    --txid ac3947090566ffa1780caa0348ea1638a2b0bc5b4ca7f37f5822fadd9f37ae58 --vout 1 --value 27338479`
 
 If we look into `8715159615153475876.prv.json` we can see that now the Bitcoin UTXO has been imported. Since the value is greater then `3566000` (the amount Bob wants to swap) he can now start listening for a trading counterpart using the listen command.
 

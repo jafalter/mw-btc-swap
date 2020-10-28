@@ -125,9 +125,13 @@ pub fn create_priv_from_pub(id : u64, directory : String) -> Result<SwapSlate, &
 
 fn get_slate_path(id : u64, directory : String, public : bool) -> String {
     if public {
-        format!("{}/{}.pub.json", directory, id)
+        let dir = format!("{}/{}.pub.json", directory, id);
+        println!("Public file path {}", dir);
+        dir
     }
     else {
-        format!("{}/{}.prv.json", directory, id)
+        let dir = format!("{}/{}.prv.json", directory, id);
+        println!("Private file path {}", dir);
+        dir
     }
 }
