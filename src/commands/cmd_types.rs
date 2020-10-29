@@ -18,6 +18,7 @@ use crate::enums::SwapStatus;
 use crate::constants;
 use crate::settings::Settings;
 use crate::enums::SwapType;
+use bitcoin::util::key::PrivateKey;
 use rand::Rng;
 use std::net::{TcpListener, TcpStream};
 use std::io::Write;
@@ -190,6 +191,7 @@ impl Command for Init {
 impl Command for ImportBtc {
     fn execute(&self, settings: Settings) -> Result<SwapSlate, &'static str> {
         let mut slate : SwapSlate = read_slate_from_disk(self.swpid, settings.slate_directory.clone()).expect("Failed to read SwapSlate");
+        PrivateKey::from_wif(&self.secret).expect("Unable to parse private key, please provide in WIF format");
         slate.prv_slate.btc.inputs.push(BTCInput{
             txid : self.txid.clone(),
             vout : self.vout,
