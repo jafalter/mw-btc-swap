@@ -1,3 +1,7 @@
+use crate::net::tcp::write_to_stream;
+use crate::net::tcp::read_from_stream;
+use crate::swap::slate::get_slate_checksum;
+use crate::swap::slate::create_priv_from_pub;
 use crate::grin::grin_types::MWCoin;
 use crate::bitcoin::bitcoin_types::BTCInput;
 use crate::swap::slate::read_slate_from_disk;
@@ -16,6 +20,7 @@ use crate::settings::Settings;
 use crate::enums::SwapType;
 use rand::Rng;
 use std::net::{TcpListener, TcpStream};
+use std::io::Write;
 
 pub trait Command {
     fn execute(&self, settings : Settings) -> Result<SwapSlate, &'static str>;
@@ -48,6 +53,14 @@ pub struct ImportGrin {
 }
 
 pub struct Listen {
+    swapid : u64
+}
+
+pub struct Accept {
+    swapid : u64
+}
+
+pub struct Execute {
     swapid : u64
 }
 
@@ -93,6 +106,22 @@ impl Init {
 impl Listen {
     pub fn new(swapid : u64) -> Listen {
         Listen {
+            swapid : swapid
+        }
+    }
+}
+
+impl Accept {
+    pub fn new(swapid : u64) -> Accept {
+        Accept {
+            swapid : swapid
+        }
+    }
+}
+
+impl Execute {
+    pub fn new(swapid : u64) -> Execute {
+        Execute {
             swapid : swapid
         }
     }
@@ -215,9 +244,36 @@ impl Command for Listen {
             let listener = TcpListener::bind(tcpaddr).unwrap(); 
             for stream in listener.incoming() {
                 println!("A client connected");
-                // TODO Lets swap
+                let msg = read_from_stream(stream.unwrap());
+                let checksum = get_slate_checksum(swp_slate.id, settings.slate_directory.clone()).unwrap();
+                if msg.eq_ignore_ascii_case(&checksum) {
+                    println!("Swap Checksum matched")
+                }
             };
             Err("Not implemented")
         }
     } 
+}
+
+impl Command for Accept {
+    fn execute(&self, settings : Settings) -> Result<SwapSlate, &'static str> {
+        let slate : SwapSlate = create_priv_from_pub(self.swapid, settings.slate_directory).expect("Unable to locate public slate file");
+        println!("Created private slate file for {}", self.swapid);
+        println!("Please import your inputs before starting the swap");
+        Ok(slate)
+    }
+}
+
+impl Command for Execute {
+    fn execute(&self, settings : Settings) -> Result<SwapSlate, &'static str> {
+        let slate : SwapSlate = read_slate_from_disk(self.swapid, settings.slate_directory.clone()).expect("Unable to read slate files from disk");
+        let mut stream : TcpStream = TcpStream::connect(format!("{}:{}", slate.pub_slate.meta.server, slate.pub_slate.meta.port))
+            .expect("Failed to connect to peer via TCP");
+        // first message exchanged is a hash of the pub slate file
+        println!("Connected to peer");
+        let checksum = get_slate_checksum(slate.id, settings.slate_directory.clone()).unwrap();
+        write_to_stream(stream, &checksum);
+
+        Err("Not implemented")
+    }
 }

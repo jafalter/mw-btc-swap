@@ -9,6 +9,7 @@ mod swap;
 mod constants;
 mod grin;
 mod bitcoin;
+mod net;
 
 use clap::{
     Arg,
@@ -141,6 +142,20 @@ fn main() {
                                 .takes_value(true)
                             )
                         )
+                        .subcommand(SubCommand::with_name("accept")
+                            .arg(Arg::with_name("swapid")
+                                .long("swapid")
+                                .required(true)
+                                .takes_value(true)
+                            )
+                        )
+                        .subcommand(SubCommand::with_name("execute")
+                            .arg(Arg::with_name("swapid")
+                                .long("swapid")
+                                .required(true)
+                                .takes_value(true)
+                            )
+                        )
                         .get_matches();
 
     let args: Vec<String> = env::args().collect();
@@ -155,6 +170,6 @@ fn main() {
         let slate : SwapSlate = cmd.execute(settings)
             .expect("Command execution failed");
         
-        swap::slate::write_slate_to_disk(slate, slate_dir, true, true);
+        swap::slate::write_slate_to_disk(&slate, slate_dir, true, true);
     }
 }

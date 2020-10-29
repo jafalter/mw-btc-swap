@@ -1,5 +1,7 @@
 
 // Parse arguments parsed 
+use crate::commands::cmd_types::Execute;
+use crate::commands::cmd_types::Accept;
 use crate::commands::cmd_types::Listen;
 use crate::commands::cmd_types::ImportGrin;
 use crate::commands::cmd_types::ImportBtc;
@@ -84,6 +86,20 @@ pub fn parse_arguments(matches: ArgMatches) -> Result<Box<dyn Command>, &'static
             let swapid : u64 = swapid_arg.parse::<u64>().unwrap();
 
             Ok(Box::new(Listen::new(swapid)))
+        }
+        ("accept", Some(args)) => {
+            let swapid_arg = String::from(args.value_of("swapid").unwrap());
+
+            let swapid : u64 = swapid_arg.parse::<u64>().unwrap();
+
+            Ok(Box::new(Accept::new(swapid)))
+        }
+        ("execute", Some(args)) => {
+            let swapid_arg = String::from(args.value_of("swapid").unwrap());
+
+            let swapid : u64 = swapid_arg.parse::<u64>().unwrap();
+
+            Ok(Box::new(Execute::new(swapid)))
         }
         _ => Err("Invalid command supplied")
     }
