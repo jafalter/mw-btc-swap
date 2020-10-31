@@ -8,3 +8,5 @@ pub const MAX_TIMEOUT : u32 = 60 * 24 * 5;
 pub const BTC_BLOCK_TIME : u32 = 10;
 // Grin avg block time is 1 minute
 pub const GRIN_BLOCK_TIME :u32 = 1;
+// If we are running on test net
+pub const TEST_NET : bool = true;
