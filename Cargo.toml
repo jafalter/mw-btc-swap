@@ -13,3 +13,4 @@ clap = "2.33"
 bitcoin = {version = "0.25.2", features = ["rand"] }
 rand = "0.6.5"
 sha2 = "0.9.1"
+hex = "0.4.2"

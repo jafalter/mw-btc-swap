@@ -52,7 +52,12 @@ fn main() {
 
     let read_settings = settings::Settings::parse_json_string(&contents);
     let settings = overwrite_settings_with_env(&read_settings);
+
+    // Initilize RNG
     let mut rng = util::get_os_rng();
+    // Initialize curve
+    let curve = util::get_secp256k1_curve();
+
     println!("BTC Client: {}, Grin Client: {}", settings.btc_node_url, settings.mw_node_url);
     
     let matches = App::new("Grin Bitcoin Swaps")
@@ -169,7 +174,7 @@ fn main() {
         let slate_dir = settings.slate_directory.clone();
         let cmd = commands::parser::parse_arguments(matches)
             .expect("Failed to parse command line arguments");
-        let slate : SwapSlate = cmd.execute(settings, &mut rng)
+        let slate : SwapSlate = cmd.execute(settings, &mut rng, &curve)
             .expect("Command execution failed");
         
         swap::slate::write_slate_to_disk(&slate, slate_dir, true, true);

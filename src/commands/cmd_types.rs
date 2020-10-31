@@ -1,6 +1,5 @@
 use crate::swap::protocol::setup_phase_swap_btc;
 use crate::swap::protocol::setup_phase_swap_mw;
-use crate::bitcoin::btcroutines::create_private_key;
 use rand::rngs::OsRng;
 use crate::net::tcp::write_to_stream;
 use crate::net::tcp::read_from_stream;
@@ -26,11 +25,11 @@ use bitcoin::util::key::PrivateKey;
 use rand::Rng;
 use std::net::Shutdown;
 use std::net::{TcpListener, TcpStream};
-use std::io::Write;
 use bitcoin::secp256k1::Secp256k1;
+use bitcoin::secp256k1::All;
 
 pub trait Command {
-    fn execute(&self, settings : Settings, rng : &mut OsRng) -> Result<SwapSlate, &'static str>;
+    fn execute(&self, settings : Settings, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, &'static str>;
 }
 
 /// The Init command will create a new Atomic Swap slate
@@ -135,7 +134,7 @@ impl Execute {
 }
 
 impl Command for Init {
-    fn execute(&self, settings : Settings, rng : &mut OsRng) -> Result<SwapSlate, &'static str> {
+    fn execute(&self, settings : Settings, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, &'static str> {
         println!("Executing init command");
         let mut rng = rand::thread_rng();
 
@@ -195,7 +194,7 @@ impl Command for Init {
 }
 
 impl Command for ImportBtc {
-    fn execute(&self, settings: Settings, rng : &mut OsRng) -> Result<SwapSlate, &'static str> {
+    fn execute(&self, settings: Settings, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, &'static str> {
         let mut slate : SwapSlate = read_slate_from_disk(self.swpid, settings.slate_directory.clone()).expect("Failed to read SwapSlate");
         let sec_key = PrivateKey::from_wif(&self.secret).expect("Unable to parse private key, please provide in WIF format");
         slate.prv_slate.btc.inputs.push(BTCInput{
@@ -209,7 +208,7 @@ impl Command for ImportBtc {
 }
 
 impl Command for ImportGrin {
-    fn execute(&self, settings : Settings, rng : &mut OsRng) -> Result<SwapSlate, &'static str> {
+    fn execute(&self, settings : Settings, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, &'static str> {
         let mut slate : SwapSlate = read_slate_from_disk(self.swpid, settings.slate_directory.clone()).expect("Failed to read SwapSlate from file");
         slate.prv_slate.mw.inputs.push(MWCoin{
             commitment : self.commitment.clone(),
@@ -221,7 +220,7 @@ impl Command for ImportGrin {
 }
 
 impl Command for Listen {
-    fn execute(&self, settings : Settings, rng : &mut OsRng) -> Result<SwapSlate, &'static str> {
+    fn execute(&self, settings : Settings, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, &'static str> {
 
         let mut swp_slate = read_slate_from_disk(self.swapid, settings.slate_directory.clone()).expect("Failed to read SwapSlate from file");
 
@@ -247,7 +246,6 @@ impl Command for Listen {
         else {    
             // Start TCP server
             let tcpaddr : String = format!("{}:{}", settings.tcp_addr, settings.tcp_port);
-            let curve = Secp256k1::new();
             println!("Starting TCP Listener on {}", tcpaddr);
             println!("Please share {}.pub.json with a interested peer. Never share your private file", self.swapid);
             let listener = TcpListener::bind(tcpaddr).unwrap(); 
@@ -262,11 +260,11 @@ impl Command for Listen {
                     // Send back OK message
                     write_to_stream(&mut stream, &String::from("OK"));
                     if swp_slate.pub_slate.btc.swap_type == SwapType::REQUESTED {
-                        setup_phase_swap_btc(&mut swp_slate, &mut stream)
+                        setup_phase_swap_btc(&mut swp_slate, &mut stream, rng, &curve)
                             .expect("Setup phase failed");
                     }
                     else {
-                        setup_phase_swap_mw(&mut swp_slate, &mut stream)
+                        setup_phase_swap_mw(&mut swp_slate, &mut stream, rng, &curve)
                             .expect("Setup phase failed");
                     }
                 }
@@ -280,7 +278,7 @@ impl Command for Listen {
 }
 
 impl Command for Accept {
-    fn execute(&self, settings : Settings, rng : &mut OsRng) -> Result<SwapSlate, &'static str> {
+    fn execute(&self, settings : Settings, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, &'static str> {
         let slate : SwapSlate = create_priv_from_pub(self.swapid, settings.slate_directory).expect("Unable to locate public slate file");
         println!("Created private slate file for {}", self.swapid);
         println!("Please import your inputs before starting the swap");
@@ -289,7 +287,7 @@ impl Command for Accept {
 }
 
 impl Command for Execute {
-    fn execute(&self, settings : Settings, rng : &mut OsRng) -> Result<SwapSlate, &'static str> {
+    fn execute(&self, settings : Settings, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, &'static str> {
         let mut slate : SwapSlate = read_slate_from_disk(self.swapid, settings.slate_directory.clone()).expect("Unable to read slate files from disk");
         let mut stream : TcpStream = TcpStream::connect(format!("{}:{}", slate.pub_slate.meta.server, slate.pub_slate.meta.port))
             .expect("Failed to connect to peer via TCP");
@@ -305,12 +303,12 @@ impl Command for Execute {
         else {
             if slate.pub_slate.btc.swap_type == SwapType::OFFERED {
                 // Offered value is btc, requested is grin
-                setup_phase_swap_mw(&mut slate, &mut stream).expect("Setup phase failed");
+                setup_phase_swap_mw(&mut slate, &mut stream, rng, &curve).expect("Setup phase failed");
                 Err("Not implemented")
             }
             else {
                 // Offerec value is grin, requested is btc
-                setup_phase_swap_btc(&mut slate, &mut stream).expect("Setup phase failed");
+                setup_phase_swap_btc(&mut slate, &mut stream, rng, &curve).expect("Setup phase failed");
                 Err("Not implemented")
             }
         }
