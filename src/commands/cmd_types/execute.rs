@@ -38,7 +38,8 @@ impl Command for Execute {
         write_to_stream(&mut stream, &checksum);
         let resp = read_from_stream(&mut stream);
         if resp.eq_ignore_ascii_case("OK") == false {
-            stream.shutdown(Shutdown::Both).expect("Failed to shutdown stream");
+            stream.shutdown(Shutdown::Both)
+                .expect("Failed to shutdown stream");
             Err("Checksums didn't match cancelled swap")
         }
         else {

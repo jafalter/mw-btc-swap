@@ -63,21 +63,24 @@ impl Command for Listen {
                 let msg = read_from_stream(&mut stream);
                 let id = swp_slate.id.clone();
                 let checksum = get_slate_checksum(id, settings.slate_directory.clone()).unwrap();
+                println!("Calculated slate checksum {}", checksum);
+
                 if msg.eq_ignore_ascii_case(&checksum) {
                     println!("Swap Checksum matched");
                     // Send back OK message
                     write_to_stream(&mut stream, &String::from("OK"));
-                    if swp_slate.pub_slate.btc.swap_type == SwapType::REQUESTED {
+                    if swp_slate.pub_slate.btc.swap_type == SwapType::OFFERED {
                         setup_phase_swap_btc(&mut swp_slate, &mut stream, rng, &curve)
-                            .expect("Setup phase failed");
+                            .expect("Setup phase (btc) failed");
                     }
                     else {
                         setup_phase_swap_mw(&mut swp_slate, &mut stream, rng, &curve)
-                            .expect("Setup phase failed");
+                            .expect("Setup phase (mw) failed");
                     }
                 }
                 else {
                     println!("Swap Checksum did not match, cancelling");
+                    write_to_stream(&mut stream, &String::from("FAULT"));
                 }
             };
             Err("Not implemented")

@@ -15,6 +15,7 @@ use bitcoin::util::psbt::serialize::Serialize;
 /// 
 /// * `slate` reference to the atomic swap slate
 pub fn setup_phase_swap_mw(slate : &mut SwapSlate, stream : &mut TcpStream, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, &'static str> {
+    println!("Starting setup phase MW");
 
     // Receiver keypair
     let rsk = create_private_key(rng);
@@ -30,6 +31,13 @@ pub fn setup_phase_swap_mw(slate : &mut SwapSlate, stream : &mut TcpStream, rng 
             .expect("Failed to decode senders pubkey")
     ).expect("Failed to deserialize senders pubkey");
 
+    // Statement x
+    let hexX = read_from_stream(stream);
+    let X = PublicKey::from_slice(
+        &hex::decode(hexX)
+            .expect("Failed to decode statement X")
+    ).expect("Failed to deserialize statement X");
+
     Err("Not implemented")
 }
 
@@ -39,6 +47,7 @@ pub fn setup_phase_swap_mw(slate : &mut SwapSlate, stream : &mut TcpStream, rng 
 /// 
 /// * `slate` reference to the atomic swap slate
 pub fn setup_phase_swap_btc(slate : &mut SwapSlate, stream : &mut TcpStream, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, &'static str> {
+    println!("Starting setup phase BTC");
 
     // Sender keypair
     let ssk = create_private_key(rng);
