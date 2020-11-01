@@ -1,12 +1,12 @@
 
 // Parse arguments parsed 
-use crate::commands::cmd_types::Execute;
-use crate::commands::cmd_types::Accept;
-use crate::commands::cmd_types::Listen;
-use crate::commands::cmd_types::ImportGrin;
-use crate::commands::cmd_types::ImportBtc;
-use crate::commands::cmd_types::Command;
-use crate::commands::cmd_types::Init;
+use crate::commands::cmd_types::execute::Execute;
+use crate::commands::cmd_types::accept::Accept;
+use crate::commands::cmd_types::listen::Listen;
+use crate::commands::cmd_types::import_grin::ImportGrin;
+use crate::commands::cmd_types::import_btc::ImportBtc;
+use crate::commands::cmd_types::command::Command;
+use crate::commands::cmd_types::init::Init;
 use crate::enums::Currency;
 use crate::enums::parse_currency_from_string;
 use crate::constants;
