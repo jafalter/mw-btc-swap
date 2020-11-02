@@ -28,13 +28,14 @@ impl Execute {
 }
 
 impl Command for Execute {
-    fn execute(&self, settings : Settings, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, &'static str> {
-        let mut slate : SwapSlate = read_slate_from_disk(self.swapid, settings.slate_directory.clone()).expect("Unable to read slate files from disk");
+    fn execute(&self, settings : &Settings, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, &'static str> {
+        let mut slate : SwapSlate = read_slate_from_disk(self.swapid, &settings.slate_directory)
+            .expect("Unable to read slate files from disk");
         let mut stream : TcpStream = TcpStream::connect(format!("{}:{}", slate.pub_slate.meta.server, slate.pub_slate.meta.port))
             .expect("Failed to connect to peer via TCP");
         // first message exchanged is a hash of the pub slate file
         println!("Connected to peer");
-        let checksum = get_slate_checksum(slate.id, settings.slate_directory.clone()).unwrap();
+        let checksum = get_slate_checksum(slate.id, &settings.slate_directory).unwrap();
         write_to_stream(&mut stream, &checksum);
         let resp = read_from_stream(&mut stream);
         if resp.eq_ignore_ascii_case("OK") == false {

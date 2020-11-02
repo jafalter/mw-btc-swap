@@ -28,9 +28,10 @@ impl Listen {
 }
 
 impl Command for Listen {
-    fn execute(&self, settings : Settings, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, &'static str> {
+    fn execute(&self, settings : &Settings, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, &'static str> {
 
-        let mut swp_slate = read_slate_from_disk(self.swapid, settings.slate_directory.clone()).expect("Failed to read SwapSlate from file");
+        let mut swp_slate = read_slate_from_disk(self.swapid, &settings.slate_directory)
+            .expect("Failed to read SwapSlate from file");
 
         // Check if we have enough value
         let offered_currency = if swp_slate.pub_slate.mw.swap_type == SwapType::OFFERED { Currency::GRIN } else { Currency::BTC };
@@ -62,7 +63,7 @@ impl Command for Listen {
                 let mut stream = client.unwrap();
                 let msg = read_from_stream(&mut stream);
                 let id = swp_slate.id.clone();
-                let checksum = get_slate_checksum(id, settings.slate_directory.clone()).unwrap();
+                let checksum = get_slate_checksum(id, &settings.slate_directory).unwrap();
                 println!("Calculated slate checksum {}", checksum);
 
                 if msg.eq_ignore_ascii_case(&checksum) {

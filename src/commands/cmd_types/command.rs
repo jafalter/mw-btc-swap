@@ -6,5 +6,5 @@ use crate::Settings;
 
 /// Interface trait to be implemented by all commands
 pub trait Command {
-    fn execute(&self, settings : Settings, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, &'static str>;
+    fn execute(&self, settings : &Settings, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, &'static str>;
 }

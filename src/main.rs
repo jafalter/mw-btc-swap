@@ -181,12 +181,11 @@ fn main() {
         usage();
     }
     else {
-        let slate_dir = settings.slate_directory.clone();
         let cmd = commands::parser::parse_arguments(matches)
             .expect("Failed to parse command line arguments");
-        let slate : SwapSlate = cmd.execute(settings, &mut rng, &curve)
+        let slate : SwapSlate = cmd.execute(&settings, &mut rng, &curve)
             .expect("Command execution failed");
         
-        swap::slate::write_slate_to_disk(&slate, slate_dir, true, true);
+        swap::slate::write_slate_to_disk(&slate, &settings.slate_directory, true, true);
     }
 }
