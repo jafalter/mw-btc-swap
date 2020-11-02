@@ -10,3 +10,6 @@ pub const BTC_BLOCK_TIME : u32 = 10;
 pub const GRIN_BLOCK_TIME :u32 = 1;
 // If we are running on test net
 pub const TEST_NET : bool = true;
+// The default value for sequence in bitcoin transactions
+pub const FFFFFFFF : u32 = 4294967295;
+pub const SIGHASH_ALL : u32 = 0x41;
