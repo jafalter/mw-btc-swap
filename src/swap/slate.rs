@@ -57,8 +57,10 @@ pub fn read_slate_from_disk(id : u64, directory : String) -> Result<SwapSlate, &
         Err("Unable to read slate files, as the files don't exist")
     }
     else {
-        let pub_contents = fs::read_to_string(pb_slate_path).expect("Error during reading of pub file");
-        let prv_contents = fs::read_to_string(pv_slate_path).expect("Error during readong of prv file");
+        let pub_contents = fs::read_to_string(pb_slate_path)
+            .expect("Error during reading of pub file");
+        let prv_contents = fs::read_to_string(pv_slate_path)
+            .expect("Error during readong of prv file");
         let pub_slate : SwapSlatePub = serde_json::from_str(&pub_contents).unwrap();
         let prv_slate : SwapSlatePriv = serde_json::from_str(&prv_contents).unwrap();
         Ok(SwapSlate {
@@ -76,7 +78,8 @@ pub fn get_slate_checksum(id : u64, directory : String) -> Result<String, &'stat
         Err("Unable to read slate files, as the files don't exist")
     }
     else {
-        let pub_contents = fs::read_to_string(pb_slate_path).expect("Error during reading of pub file");
+        let pub_contents = fs::read_to_string(pb_slate_path)
+            .expect("Error during reading of pub slate file");
         let mut hasher = Sha256::new();
         hasher.update(pub_contents);
         let bytes = hasher.finalize();
@@ -126,12 +129,10 @@ pub fn create_priv_from_pub(id : u64, directory : String) -> Result<SwapSlate, &
 fn get_slate_path(id : u64, directory : String, public : bool) -> String {
     if public {
         let dir = format!("{}/{}.pub.json", directory, id);
-        println!("Public file path {}", dir);
         dir
     }
     else {
         let dir = format!("{}/{}.prv.json", directory, id);
-        println!("Private file path {}", dir);
         dir
     }
 }

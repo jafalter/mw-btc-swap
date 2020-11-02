@@ -1,12 +1,12 @@
 
 // Parse arguments parsed 
-use crate::commands::cmd_types::Execute;
-use crate::commands::cmd_types::Accept;
-use crate::commands::cmd_types::Listen;
-use crate::commands::cmd_types::ImportGrin;
-use crate::commands::cmd_types::ImportBtc;
-use crate::commands::cmd_types::Command;
-use crate::commands::cmd_types::Init;
+use crate::commands::cmd_types::execute::Execute;
+use crate::commands::cmd_types::accept::Accept;
+use crate::commands::cmd_types::listen::Listen;
+use crate::commands::cmd_types::import_grin::ImportGrin;
+use crate::commands::cmd_types::import_btc::ImportBtc;
+use crate::commands::cmd_types::command::Command;
+use crate::commands::cmd_types::init::Init;
 use crate::enums::Currency;
 use crate::enums::parse_currency_from_string;
 use crate::constants;
@@ -57,13 +57,15 @@ pub fn parse_arguments(matches: ArgMatches) -> Result<Box<dyn Command>, &'static
                     let vout_arg = String::from(subargs.value_of("vout").unwrap());
                     let value_arg = String::from(subargs.value_of("value").unwrap());
                     let secret = String::from(subargs.value_of("secret").unwrap());
+                    let pub_key = String::from(subargs.value_of("pub_key").unwrap());
+                    let pub_script = String::from(subargs.value_of("pub_script").unwrap());
                     
                     // Parse arguments
                     let swapid : u64 = swapid_arg.parse::<u64>().unwrap();
-                    let vout : u16 = vout_arg.parse::<u16>().unwrap();
+                    let vout : u32 = vout_arg.parse::<u32>().unwrap();
                     let value : u64 = value_arg.parse::<u64>().unwrap();
 
-                    Ok(Box::new(ImportBtc::new(swapid, txid, vout, value, secret)))
+                    Ok(Box::new(ImportBtc::new(swapid, txid, vout, value, secret, pub_key, pub_script)))
                 },
                 ("grin", Some(subargs)) => {
                     let swapid_arg = String::from(subargs.value_of("swapid").unwrap());
