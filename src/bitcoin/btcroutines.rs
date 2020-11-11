@@ -25,6 +25,11 @@ use bitcoin::network::constants::Network;
 use bitcoin::hashes::sha256d::Hash;
 use std::str::FromStr;
 
+/// Creates a new secp256k1 private key used in bitcoin
+/// 
+/// # Arguments
+/// 
+/// * `rng` Randomness generator
 pub fn create_private_key(rng : &mut OsRng) -> PrivateKey {
     let skey = SecretKey::new(rng);
     let nw = if TEST_NET { Network::Testnet } else { Network::Bitcoin };

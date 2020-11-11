@@ -1,5 +1,10 @@
 {
-    "btc_node_url" : "",
+    "btc" : {
+        "url" : "80.241.216.66",
+        "user" : "",
+        "pass" : "",
+        "port" : 18332
+    },
     "mw_node_url" : "",
     "tcp_addr" : "127.0.0.1",
     "tcp_port" : "80",
