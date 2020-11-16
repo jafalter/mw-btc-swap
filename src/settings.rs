@@ -2,10 +2,11 @@ use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize)]
 pub struct BtcNodeSettings {
-    url : String,
-    user : String,
-    pass : String,
-    port : u16
+    pub url : String,
+    pub user : String,
+    pub pass : String,
+    pub port : u16,
+    pub id : String
 }
 
 impl BtcNodeSettings {
@@ -14,7 +15,8 @@ impl BtcNodeSettings {
             url : self.url.clone(),
             user : self.user.clone(),
             pass : self.pass.clone(),
-            port : self.port
+            port : self.port,
+            id : self.id.clone()
         }
     }
 }

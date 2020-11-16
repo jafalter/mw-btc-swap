@@ -1,9 +1,10 @@
 {
     "btc" : {
         "url" : "80.241.216.66",
-        "user" : "",
-        "pass" : "",
-        "port" : 18332
+        "user" : "jabfalter",
+        "pass" : "PMQoMR8NA7B4Z26Jjst-QlTNTSTkTjXE0unAcbM_8Bs=",
+        "port" : 18332,
+        "id" : "mw-btc-swap"
     },
     "mw_node_url" : "",
     "tcp_addr" : "127.0.0.1",

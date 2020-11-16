@@ -1,6 +1,12 @@
 use serde::{Serialize, Deserialize};
 
 #[derive(PartialEq)]
+pub enum HttpMethod {
+    GET,
+    POST
+}
+
+#[derive(PartialEq)]
 pub enum Currency {
     BTC,
     GRIN
