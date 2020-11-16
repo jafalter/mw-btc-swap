@@ -44,7 +44,7 @@ impl Init {
 }
 
 impl Command for Init {
-    fn execute(&self, settings : Settings, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, &'static str> {
+    fn execute(&self, settings : &Settings, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, &'static str> {
         println!("Executing init command");
         let mut rng = rand::thread_rng();
 
@@ -82,8 +82,8 @@ impl Command for Init {
                 swap_type : if self.from == Currency::GRIN { SwapType::OFFERED } else { SwapType::REQUESTED }
             };
             let meta = Meta {
-                server : settings.tcp_addr,
-                port : settings.tcp_port
+                server : settings.tcp_addr.clone(),
+                port : settings.tcp_port.clone()
             };
             let pub_slate = SwapSlatePub {
                 status : SwapStatus::INITIALIZED,

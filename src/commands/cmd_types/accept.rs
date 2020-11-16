@@ -20,8 +20,9 @@ impl Accept {
 }
 
 impl Command for Accept {
-    fn execute(&self, settings : Settings, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, &'static str> {
-        let slate : SwapSlate = create_priv_from_pub(self.swapid, settings.slate_directory).expect("Unable to locate public slate file");
+    fn execute(&self, settings : &Settings, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, &'static str> {
+        let slate : SwapSlate = create_priv_from_pub(self.swapid, &settings.slate_directory)
+            .expect("Unable to locate public slate file");
         println!("Created private slate file for {}", self.swapid);
         println!("Please import your inputs before starting the swap");
         Ok(slate)

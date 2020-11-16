@@ -16,9 +16,9 @@ use sha2::{Sha256, Digest};
 /// * `directory` - The directory in which the slate files are stored (can be configured in settings.json)
 /// * `wrt_priv` - If the function should write the private file
 /// * `wrt_pub` - If the function should write the public file
-pub fn write_slate_to_disk(slate : &SwapSlate, directory : String, wrt_priv: bool, wrt_pub: bool) {
-    let pv_slate_path = get_slate_path(slate.id, directory.clone(), false);
-    let pb_slate_path = get_slate_path(slate.id, directory.clone(), true);
+pub fn write_slate_to_disk(slate : &SwapSlate, directory : &str, wrt_priv: bool, wrt_pub: bool) {
+    let pv_slate_path = get_slate_path(slate.id, &directory, false);
+    let pb_slate_path = get_slate_path(slate.id, &directory, true);
 
     let pv_exists = Path::new(&pv_slate_path).exists();
     let pb_exists = Path::new(&pb_slate_path).exists();
@@ -49,9 +49,9 @@ pub fn write_slate_to_disk(slate : &SwapSlate, directory : String, wrt_priv: boo
 /// 
 /// * `id` the id of the Atomi Swap
 /// * `directory` the directory in which the slate files are stored. (Can be configured in settings.json)
-pub fn read_slate_from_disk(id : u64, directory : String) -> Result<SwapSlate, &'static str> {
-    let pv_slate_path = get_slate_path(id, directory.clone(), false);
-    let pb_slate_path = get_slate_path(id, directory.clone(), true);
+pub fn read_slate_from_disk(id : u64, directory : &str) -> Result<SwapSlate, &'static str> {
+    let pv_slate_path = get_slate_path(id, &directory, false);
+    let pb_slate_path = get_slate_path(id, &directory, true);
 
     if Path::new(&pv_slate_path).exists() == false || Path::new(&pb_slate_path).exists() == false {
         Err("Unable to read slate files, as the files don't exist")
@@ -71,8 +71,8 @@ pub fn read_slate_from_disk(id : u64, directory : String) -> Result<SwapSlate, &
     }
 }
 
-pub fn get_slate_checksum(id : u64, directory : String) -> Result<String, &'static str> {
-    let pb_slate_path = get_slate_path(id, directory.clone(), true);
+pub fn get_slate_checksum(id : u64, directory : &str) -> Result<String, &'static str> {
+    let pb_slate_path = get_slate_path(id, &directory, true);
 
     if Path::new(&pb_slate_path).exists() == false {
         Err("Unable to read slate files, as the files don't exist")
@@ -93,8 +93,8 @@ pub fn get_slate_checksum(id : u64, directory : String) -> Result<String, &'stat
 /// 
 /// * `id` the id of the Atomic Swap
 /// * `directory` the directory in which the slate files are store. (Can be configured in settions.json)
-pub fn create_priv_from_pub(id : u64, directory : String) -> Result<SwapSlate, &'static str> {
-    let pb_slate_path = get_slate_path(id, directory.clone(), true);
+pub fn create_priv_from_pub(id : u64, directory : &str) -> Result<SwapSlate, &'static str> {
+    let pb_slate_path = get_slate_path(id, &directory, true);
 
     if Path::new(&pb_slate_path).exists() == false {
         Err("Unable to create private slate file, as the public file doesn't exist")
@@ -126,7 +126,7 @@ pub fn create_priv_from_pub(id : u64, directory : String) -> Result<SwapSlate, &
     }
 }
 
-fn get_slate_path(id : u64, directory : String, public : bool) -> String {
+fn get_slate_path(id : u64, directory : &str, public : bool) -> String {
     if public {
         let dir = format!("{}/{}.pub.json", directory, id);
         dir

@@ -31,14 +31,13 @@ fn usage() {
 /// for example:
 /// SETTINGS_TCP_ADDR=alice
 fn overwrite_settings_with_env(settings : &Settings) -> Settings {
-    let btc_node_url = env::var("SETTINGS_BTC_NODE_URL").unwrap_or(settings.btc_node_url.clone());
     let mw_node_url = env::var("SETTINGS_MW_NODE_URL").unwrap_or(settings.mw_node_url.clone());
     let tcp_addr = env::var("SETTINGS_TCP_ADDR").unwrap_or(settings.tcp_addr.clone());
     let tcp_port = env::var("SETTINGS_TCP_PORT").unwrap_or(settings.tcp_port.clone());
     let slate_directory = env::var("SETTINGS_SLATE_DIRECTORY").unwrap_or(settings.slate_directory.clone());
 
     Settings{
-        btc_node_url : btc_node_url,
+        btc : settings.btc.clone(),
         mw_node_url : mw_node_url,
         tcp_addr : tcp_addr,
         tcp_port : tcp_port,
@@ -57,8 +56,6 @@ fn main() {
     let mut rng = util::get_os_rng();
     // Initialize curve
     let curve = util::get_secp256k1_curve();
-
-    println!("BTC Client: {}, Grin Client: {}", settings.btc_node_url, settings.mw_node_url);
     
     let matches = App::new("Grin Bitcoin Swaps")
                         .version("1.0")
@@ -181,12 +178,11 @@ fn main() {
         usage();
     }
     else {
-        let slate_dir = settings.slate_directory.clone();
         let cmd = commands::parser::parse_arguments(matches)
             .expect("Failed to parse command line arguments");
-        let slate : SwapSlate = cmd.execute(settings, &mut rng, &curve)
+        let slate : SwapSlate = cmd.execute(&settings, &mut rng, &curve)
             .expect("Command execution failed");
         
-        swap::slate::write_slate_to_disk(&slate, slate_dir, true, true);
+        swap::slate::write_slate_to_disk(&slate, &settings.slate_directory, true, true);
     }
 }
