@@ -52,6 +52,7 @@ impl BitcoinCore {
             Err(e) => Err(e.to_string())
         }
     }
+
 }
 
 #[cfg(test)]
