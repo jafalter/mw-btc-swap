@@ -1,6 +1,13 @@
 # mw-btc-swap
 Implementation for my masters thesis
 
+## requirements for building from source
+
+* g++
+* pkg-config
+* rust + cargo
+* libssl-dev
+
 # commands
 
 ## init

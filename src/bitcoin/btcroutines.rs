@@ -51,6 +51,7 @@ pub fn create_private_key(rng : &mut OsRng) -> PrivateKey {
 /// * `inputs` the inputs spend in this transaction
 /// * `amount` the amount which should be locked
 /// * `fee` the miners fee
+/// * `refund_time` timelock for when this output should be spendable be the refunder
 pub fn create_lock_transaction(recv_pk : PublicKey, X : PublicKey, refund_pk : PublicKey, inputs : Vec<BTCInput>, amount: u64, fee: u64, refund_time : i64) -> Transaction {
     let mut txinp : Vec<TxIn> = Vec::new();
     let mut txout : Vec<TxOut> = Vec::new();
@@ -69,16 +70,38 @@ pub fn create_lock_transaction(recv_pk : PublicKey, X : PublicKey, refund_pk : P
             witness : witness_data
         });
     }
+    let script_pub = get_lock_pub_script(recv_pk, X, refund_pk, refund_time);
+    
+    txout.push(TxOut{
+        value : amount - fee,
+        script_pubkey : script_pub
+    });
 
-    // Create the transaction output which is a single P2SH script of the form
-    // OP_IF 
-    //  <refund_time>
-    //  OP_CHECKLOCKTIMEVERIFY
-    //  OP_DROP
-    //  <refund_pub_key>
-    //  OP_CHECKSIGVERIFY
-    // OP_ELSE
-    //  2 <recv_pub_key> <X> 2 CHECKMULTISIGVERIFY
+    Transaction {
+        version : 1,
+        lock_time : 0,
+        input: txinp,
+        output: txout
+    }
+}
+
+/// Create the transaction output which is a single P2SH script of the form
+/// OP_IF 
+///  <refund_time>
+///  OP_CHECKLOCKTIMEVERIFY
+///  OP_DROP
+///  <refund_pub_key>
+///  OP_CHECKSIGVERIFY
+/// OP_ELSE
+///  2 <recv_pub_key> <X> 2 CHECKMULTISIGVERIFY
+///
+/// # Arguments
+/// 
+/// * `recv_pk` the receivers public key
+/// * `X` the statement X = g^x for which the receivers needs to get x in order to spend this ouput
+/// * `refund_pk` the public key of the sender which can be spent after refund time refund_time
+/// * `refund_time` timelock for when this output should be spendable be the refunder
+pub fn get_lock_pub_script(recv_pk : PublicKey, X : PublicKey, refund_pk : PublicKey, refund_time : i64) -> Script {
     let builder = Builder::new()
         .push_opcode(OP_IF)
         .push_int(refund_time)
@@ -93,18 +116,7 @@ pub fn create_lock_transaction(recv_pk : PublicKey, X : PublicKey, refund_pk : P
         .push_int(2)
         .push_opcode(OP_CSV);
 
-    let script_pub = Script::new_p2sh(&builder.into_script().script_hash());
-    txout.push(TxOut{
-        value : amount - fee,
-        script_pubkey : script_pub
-    });
-
-    Transaction {
-        version : 1,
-        lock_time : 0,
-        input: txinp,
-        output: txout
-    }
+    Script::new_p2sh(&builder.into_script().script_hash())
 }
 
 /// Sign a bitcoin transaction spending P2PKH outputs
