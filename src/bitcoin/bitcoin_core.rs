@@ -3,6 +3,8 @@ use crate::net::http::JsonRpc;
 use crate::settings::BtcNodeSettings;
 use crate::bitcoin::bitcoin_core_responses::NetworkInfo;
 use crate::bitcoin::bitcoin_core_responses::NetworkInfoResult;
+use crate::bitcoin::bitcoin_core_responses::ListUnspentResponse;
+use bitcoin::util::address::Address;
 
 pub struct BitcoinCore {
     settings : BtcNodeSettings,
@@ -51,6 +53,51 @@ impl BitcoinCore {
             },
             Err(e) => Err(e.to_string())
         }
+    }
+
+    /// Import a new address into the node to be able to check its balance
+    /// Call to this method takes very long as it triggers a rescan therefore we expect it to timeout
+    /// 
+    /// # Arguments
+    /// 
+    /// * `addr` the address to index
+    pub fn import_btc_address(&self, addr : Address) {
+        let rpc = JsonRpc::new(String::from("1.0"), self.settings.id.clone(), String::from("importaddress"), vec![addr.to_string()]);
+        let url = format!("http://{}:{}", self.settings.url, self.settings.port);
+        let req = self.req_factory.new_json_rpc_request(url, rpc, self.settings.user.clone(), self.settings.pass.clone());
+        match req.execute() {
+            _ => ()
+        }
+    }
+
+    pub fn get_address_final_balance(&self, addr : Address) -> Result<u64, String> {
+        let rpc = JsonRpc::new(String::from("1.0"), self.settings.id.clone(), String::from("listunspent"), !format!("[1,9999999,[\"{}\"]]", addr.to_string()));
+        let url = self.get_url();
+        let req = self.req_factory.new_json_rpc_request(url, rpc, self.settings.user.clone(), self.settings.pass.clone());
+        match req.execute() {
+            Ok(x) => {
+                println!("{}", x.content);
+                let parsed : ListUnspentResponse = serde_json::from_str(&x.content)
+                    .expect("Failed to parse listunspent rpc response");
+                if parsed.id != self.settings.id {
+                    Err("RPC Request and Resposne id didn't match!".to_string())
+                }
+                else {
+                    let balance : u64 = 0;
+                    // Sum up the unspent balances of the UTXOs under this address
+                    for e in &parsed.result {
+                        let sat_amount = (e.amount * 100_000_000.0) as u64;
+                        balance = balance + sat_amount;
+                    }
+                    Ok(balance)
+                }
+            }
+            Err(e) => Err(e.to_string())
+        }
+    }
+
+    fn get_url(&self) -> String {
+        format!("http://{}:{}", self.settings.url, self.settings.port)
     }
 
 }

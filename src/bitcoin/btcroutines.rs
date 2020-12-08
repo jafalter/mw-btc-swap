@@ -20,6 +20,7 @@ use bitcoin::secp256k1::key::SecretKey;
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::secp256k1::Message;
 use bitcoin::secp256k1::All;
+use bitcoin::util::address::Address;
 use crate::constants::TEST_NET;
 use bitcoin::network::constants::Network;
 use bitcoin::hashes::sha256d::Hash;
@@ -117,6 +118,16 @@ pub fn get_lock_pub_script(recv_pk : PublicKey, X : PublicKey, refund_pk : Publi
         .push_opcode(OP_CSV);
 
     Script::new_p2sh(&builder.into_script().script_hash())
+}
+
+/// Converts a bitcoin pub script into a Bitcoin Address
+/// 
+/// # Arguments
+/// 
+/// * `s` the bitcoin script to convert into a address
+pub fn script_to_address(s : Script) -> Address {
+    let nw = if TEST_NET { Network::Testnet } else { Network::Bitcoin };
+    Address::from_script(&s, nw).unwrap()
 }
 
 /// Sign a bitcoin transaction spending P2PKH outputs
