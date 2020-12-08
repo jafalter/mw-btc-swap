@@ -1,6 +1,7 @@
 use crate::enums::HttpMethod;
 use serde::{Serialize, Deserialize};
 use std::clone::Clone;
+use std::time::Duration;
 
 #[derive(Serialize, Deserialize)]
 pub struct JsonRpc {
@@ -111,6 +112,7 @@ impl HttpRequest {
             let client = reqwest::blocking::Client::new();
         if self.method == HttpMethod::POST {
             let mut req = client.post(&self.url)
+                .timeout(Duration::new(30, 0))
                 .json(&self.body);
             match &self.auth {
                 Some(x) => req = req.basic_auth(&x.username, x.password.as_ref()),

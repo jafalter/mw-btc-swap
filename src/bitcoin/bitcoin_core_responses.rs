@@ -21,3 +21,24 @@ pub struct NetworkInfoResult {
     pub incrementalfee : f32,
     pub warnings : String
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ListUnspentResponse {
+    pub result : Vec<UTXO>,
+    pub error : Option<String>,
+    pub id : String
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct UTXO {
+    pub txid : String,
+    pub vout : u32,
+    pub address : String,
+    pub label : String,
+    pub scriptPubKey : String,
+    pub amount : f64,
+    pub confirmations : u32,
+    pub spendable : bool,
+    pub solvable : bool,
+    pub safe : bool
+}
