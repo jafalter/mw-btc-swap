@@ -36,7 +36,7 @@ pub struct UTXO {
     pub address : String,
     pub label : String,
     pub scriptPubKey : String,
-    pub amount : f64,
+    pub amount : f32,
     pub confirmations : u32,
     pub spendable : bool,
     pub solvable : bool,
