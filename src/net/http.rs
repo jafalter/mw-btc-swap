@@ -8,7 +8,7 @@ pub struct JsonRpc {
     jsonrpc : String,
     id : String,
     method : String,
-    params : Vec<String>
+    params : String
 }
 
 pub struct BasicAuth {
@@ -51,8 +51,8 @@ impl JsonRpc {
     /// # Arguments 
     /// * `jsonrpc` the jsonrpc version
     /// * `method` the remote method which should be called
-    /// * `params` list of parameters passed to the method
-    pub fn new(jsonrpc : String, id : String, method : String, params : Vec<String>) -> JsonRpc {
+    /// * `params` list of parameters passed to the method, must be a json encoded string 
+    pub fn new(jsonrpc : String, id : String, method : String, params : String) -> JsonRpc {
         JsonRpc {
             jsonrpc : jsonrpc,
             id : id,
@@ -103,10 +103,15 @@ impl HttpRequest {
     pub fn execute(&self) -> Result<HttpResponse,&'static str> {
         if self.response_stub.is_some() {
             let r = self.response_stub.as_ref().unwrap();
-            Ok(HttpResponse {
-                status : r.status,
-                content : r.content.clone()
-            })
+            if r.status != 200 {
+                Err("Failed with invalid respcode")
+            }
+            else {
+                Ok(HttpResponse {
+                    status : r.status,
+                    content : r.content.clone()
+                })
+            }
         }
         else {
             let client = reqwest::blocking::Client::new();
