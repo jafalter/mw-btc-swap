@@ -2,8 +2,8 @@ use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct NetworkInfo {
-    pub result : NetworkInfoResult,
-    pub error : Option<String>,
+    pub result : Option<NetworkInfoResult>,
+    pub error : Option<Error>,
     pub id : String
 }
 
@@ -24,9 +24,22 @@ pub struct NetworkInfoResult {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ListUnspentResponse {
-    pub result : Vec<UTXO>,
-    pub error : Option<String>,
+    pub result : Option<Vec<UTXO>>,
+    pub error : Option<Error>,
     pub id : String
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SendRawTxResponse {
+    pub result : Option<String>,
+    pub error : Option<Error>,
+    pub id : String
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Error {
+    pub code : i32,
+    pub message : String
 }
 
 #[derive(Serialize, Deserialize, Debug)]
