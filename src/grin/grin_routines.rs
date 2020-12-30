@@ -18,7 +18,7 @@ pub fn create_secret_key(rng : &mut OsRng, secp : &Secp256k1) -> SecretKey {
 /// # Arguments
 /// * `key` the key to serialize
 pub fn serialize_secret_key(key : &SecretKey) -> String {
-    hex::encode(key.0)
+    hex::encode(&key)
 }
 
 /// Deserialize a hexdecoded string to a SecretKey object
@@ -28,7 +28,7 @@ pub fn serialize_secret_key(key : &SecretKey) -> String {
 /// * `secp` Secp256 functionatlity
 pub fn deserialize_secret_key(key : &String, secp : &Secp256k1) -> SecretKey {
     SecretKey::from_slice(secp, &hex::decode(key)
-    .expect("Failed to deserialize a secret key from hex string"))
+        .expect("Failed to deserialize a secret key from hex string"))
         .expect("Failed to deserialize a secret key from hex string")
 }
 

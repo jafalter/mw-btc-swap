@@ -133,6 +133,16 @@ impl GrinCore {
             })
         }
     }
+
+    pub fn recv_coins(&mut self, ptx : Slate, fund_value : u64) {
+        // Validate output coin rangeproofs
+        for out in ptx.tx.unwrap().outputs() {
+            let prf = out.proof;
+            let com = out.identifier.commit;
+            let vrf = self.secp.verify_bullet_proof(com, prf, None)
+                .expect("Failed to verify outputcoin rangeproof");
+        }
+    }
     
 }
 
