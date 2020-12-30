@@ -1,19 +1,21 @@
 use crate::grin::grin_types::MWCoin;
 use grin_wallet_libwallet::Slate;
-use grin_util::secp::pedersen::{Commitment};
+use grin_util::secp::pedersen::Commitment;
 use grin_core::core::transaction::OutputFeatures;
 use grin_core::core::Input;
+use grin_core::core::Inputs;
 use grin_core::core::Output;
+use grin_core::core::Transaction;
 use rand::rngs::OsRng;
 use grin_util::secp::Secp256k1;
 use grin_util::secp::ContextFlag;
 use grin_util::secp::key::{PublicKey, SecretKey};
-use grin_wallet_libwallet::ParticipantData;
-use grin_keychain::ExtKeychain;
-use grin_keychain::Keychain;
+use grin_core::core::transaction::FeeFields;
+use grin_core::core::OutputIdentifier;
+use grin_wallet_libwallet::Context;
+use grin_keychain::{Keychain,ExtKeychain,Identifier};
 use crate::util::get_os_rng;
-use crate::grin::grin_routines::create_secret_key;
-use crate::grin::grin_routines::clone_secret_key;
+use crate::grin::grin_routines::{*};
 
 pub struct GrinCore {
     rng : OsRng,
@@ -25,7 +27,7 @@ pub struct SpendCoinsResult {
     slate : Slate,
     sig_key : SecretKey,
     sig_nonce : SecretKey,
-    out_bf : SecretKey
+    change_coin : MWCoin
 }
 
 impl GrinCore {
@@ -41,9 +43,9 @@ impl GrinCore {
         }
     }
 
-    pub fn spend_coins(&mut self, inputs : Vec<MWCoin>, fund_value : u64, fee : u64, timelock : u32, num_participants : usize) -> Result<SpendCoinsResult,String> {
+    pub fn spend_coins(&mut self, inputs : Vec<MWCoin>, fund_value : u64, fee : u64, timelock : u32, num_participants : u8) -> Result<SpendCoinsResult,String> {
         // Initial transaction slate
-        let mut mwslate = Slate::blank(num_participants);
+        let mut mwslate = Slate::blank(num_participants, false);
         
         // Some input param validations
         let mut inpval : u64 = 0;
@@ -64,31 +66,32 @@ impl GrinCore {
         }
         else {
             // Create needed blinding factors and nonce values
-            let mut out_bf = create_secret_key(&mut self.rng, &self.secp);
-            let out_bf_com = clone_secret_key(&out_bf);
-            let out_bf_prf = clone_secret_key(&out_bf);
+            let out_bf = create_secret_key(&mut self.rng, &self.secp);
+            let out_bf_com = out_bf.clone();
+            let out_bf_prf = out_bf.clone();
             let sig_nonce = create_secret_key(&mut self.rng, &self.secp);
             let prf_nonce = create_secret_key(&mut self.rng, &self.secp);
             let rew_nonce = create_secret_key(&mut self.rng, &self.secp);
-            let mut bf_sum = clone_secret_key(&out_bf);
-
-            println!("{}", hex::encode(&out_bf.0));
+            let mut bf_sum = out_bf.clone();
 
             mwslate.amount = fund_value;
-            mwslate.fee = fee;
+            let feefield = FeeFields::new(0, fee).unwrap();
+            mwslate.fee_fields = feefield;
+            let mut tx = Transaction::empty();
     
             // Add the input coins
+            let mut inp_vector : Vec<Input> = vec!();
             for coin in inputs {
-                let commitment = Commitment::from_vec(hex::decode(coin.commitment).expect("Failed to decode commitment of input"));
-                let input = Input {
-                    features : OutputFeatures::Plain,
-                    commit : commitment
-                };
-                let mut inp_bf = SecretKey::from_slice(&self.secp, &hex::decode(coin.blinding_factor).unwrap()).unwrap();
+                let commitment = deserialize_commitment(&coin.commitment);
+                let mut inp_bf = deserialize_secret_key(&coin.blinding_factor, &self.secp);
+                let input = Input::new(OutputFeatures::Plain, commitment);
+                inp_vector.push(input);
                 inp_bf.inv_assign(&self.secp).unwrap();
                 bf_sum.add_assign(&self.secp, &inp_bf).unwrap();
-                mwslate.tx.body.inputs.push(input);
+                tx = tx.with_input(input);
             }
+            let inputs = Inputs::FeaturesAndCommit(inp_vector);
+            tx = Transaction::new(inputs, &tx.body.outputs, tx.body.kernels());
     
             // Add changecoin output
             let change_value = inpval - fund_value - fee;
@@ -96,20 +99,37 @@ impl GrinCore {
                 .expect("Failed to genere pedersen commitment for change output coin");
             // Compute bulletproof rangeproof
             let proof = self.secp.bullet_proof(change_value, out_bf_prf, rew_nonce, prf_nonce, None, None);
-            let output = Output {
-                features : OutputFeatures::Plain,
-                commit : commitment,
-                proof : proof
+            let output = Output::new(OutputFeatures::Plain, commitment, proof);
+            tx = tx.with_output(output);
+            mwslate.tx = Some(tx);
+            let mut ctx : Context = Context{
+                parent_key_id: Identifier::zero(),
+                sec_key: bf_sum.clone(),
+                sec_nonce: sig_nonce.clone(),
+                initial_sec_key: out_bf.clone(),
+                initial_sec_nonce: sig_nonce.clone(),
+                output_ids: vec!(),
+                input_ids: vec!(),
+                amount: fund_value,
+                fee: Some(feefield),
+                payment_proof_derivation_index: None,
+                late_lock_args: None,
+                calculated_excess: None,
             };
-            mwslate.tx.body.outputs.push(output);
-            mwslate.fill_round_1(&self.chain, &mut bf_sum, &sig_nonce, 0, None, false)
+            mwslate.fill_round_1(&self.chain, &mut ctx)
                 .expect("Failed to add senders particpant data");
+            let enc_com = serialize_commitment(&commitment);
+            let enc_bf = serialize_secret_key(&out_bf);
     
             Ok(SpendCoinsResult {
                 slate : mwslate,
-                sig_key : clone_secret_key(&bf_sum),
-                sig_nonce : clone_secret_key(&sig_nonce),
-                out_bf : clone_secret_key(&out_bf)
+                sig_key : bf_sum.clone(),
+                sig_nonce : sig_nonce.clone(),
+                change_coin : MWCoin {
+                    commitment : enc_com,
+                    blinding_factor: enc_bf,
+                    value: change_value
+                }
             })
         }
     }
@@ -132,5 +152,6 @@ mod test {
         let result = core.spend_coins(vec!(coin), 600, 20, 0, 2).unwrap();
         let ser = serde_json::to_string(&result.slate).unwrap();
         println!("{}", ser);
+        println!("{}", result.change_coin.commitment);
     }
 }
