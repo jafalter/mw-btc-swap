@@ -6,9 +6,10 @@ use grin_core::core::{Input,Inputs,Output,Transaction};
 use rand::rngs::OsRng;
 use grin_util::secp::{Secp256k1,ContextFlag};
 use grin_util::secp::key::{PublicKey, SecretKey};
+use grin_core::libtx::tx_fee;
 use grin_core::core::transaction::FeeFields;
 use grin_wallet_libwallet::Context;
-use grin_keychain::{Keychain,ExtKeychain,Identifier};
+use grin_keychain::{Keychain,ExtKeychain,Identifier,BlindingFactor,BlindSum};
 use crate::util::get_os_rng;
 use crate::grin::grin_routines::{*};
 
@@ -50,13 +51,16 @@ impl GrinCore {
     /// # Arguments
     /// 
     /// * `inputs` the inputs which should be spent
-    /// * `fund_value` value which should be transferred to a receiver
+    /// * `fund_value` value which should be transferred to a receiver (IN NANO GRIN)
     /// * `fee` transaction fee
     /// * `timelock` optional transaction timelock
-    pub fn spend_coins(&mut self, inputs : Vec<MWCoin>, fund_value : u64, fee : u64, timelock : u32) -> Result<SpendCoinsResult,String> {
+    pub fn spend_coins(&mut self, inputs : Vec<MWCoin>, fund_value : u64, timelock : u32, num_of_outputs : usize) -> Result<SpendCoinsResult,String> {
         // Initial transaction slate
         let mut slate = Slate::blank(2, false);
-        
+        // Calculcate basefee based on number of inputs and expected outputs
+        let fee = tx_fee(inputs.len(), num_of_outputs, 1);
+        println!("Fee is {}", fee);
+
         // Some input param validations
         let mut inpval : u64 = 0;
         let mut duplicate = false;
@@ -81,14 +85,16 @@ impl GrinCore {
             Err(String::from("Spend coins function failed, duplicate input coins provided"))
         }
         else {
+            println!("Input coin value is {}", inpval);
             // Create needed blinding factors and nonce values
-            let out_bf = create_secret_key(&mut self.rng, &self.secp);
-            let out_bf_com = out_bf.clone();
-            let out_bf_prf = out_bf.clone();
+            let change_coin_key = create_secret_key(&mut self.rng, &self.secp);
             let sig_nonce = create_secret_key(&mut self.rng, &self.secp);
             let prf_nonce = create_secret_key(&mut self.rng, &self.secp);
             let rew_nonce = create_secret_key(&mut self.rng, &self.secp);
-            let mut bf_sum = out_bf.clone();
+            let mut blind_sum = BlindSum::new();
+            let offset = BlindingFactor::from_secret_key(create_secret_key(&mut self.rng, &self.secp));
+            let out_bf = BlindingFactor::from_secret_key(change_coin_key.clone());
+            blind_sum = blind_sum.add_blinding_factor(out_bf);
 
             slate.amount = fund_value;
             let feefield = FeeFields::new(0, fee).unwrap();
@@ -99,30 +105,38 @@ impl GrinCore {
             let mut inp_vector : Vec<Input> = vec!();
             for coin in inputs {
                 let commitment = deserialize_commitment(&coin.commitment);
-                let mut inp_bf = deserialize_secret_key(&coin.blinding_factor, &self.secp);
+                let inp_key = deserialize_secret_key(&coin.blinding_factor, &self.secp);
                 let input = Input::new(OutputFeatures::Plain, commitment);
                 inp_vector.push(input);
-                inp_bf.inv_assign(&self.secp).unwrap();
-                bf_sum.add_assign(&self.secp, &inp_bf).unwrap();
-                tx = tx.with_input(input);
+                let inp_bf = BlindingFactor::from_secret_key(inp_key.clone());
+                blind_sum = blind_sum.sub_blinding_factor(inp_bf);
             }
             let inputs = Inputs::FeaturesAndCommit(inp_vector);
             tx = Transaction::new(inputs, &tx.body.outputs, tx.body.kernels());
+            let final_bf = self.chain.blind_sum(&blind_sum)
+                .expect("Failure when calcuclating blinding factor sum");
     
             // Add changecoin output
             let change_value = inpval - fund_value - fee;
-            let commitment = self.secp.commit(change_value, out_bf_com)
+            println!("Creating change coin with value {}", change_value);
+            let commitment = self.secp.commit(change_value, change_coin_key.clone())
                 .expect("Failed to genere pedersen commitment for change output coin");
             // Compute bulletproof rangeproof
-            let proof = self.secp.bullet_proof(change_value, out_bf_prf, rew_nonce, prf_nonce, None, None);
+            let proof = self.secp.bullet_proof(change_value, change_coin_key.clone(), rew_nonce, prf_nonce, None, None);
             let output = Output::new(OutputFeatures::Plain, commitment, proof);
             tx = tx.with_output(output);
+            tx.offset = offset.clone();
             slate.tx = Some(tx);
+            let final_key = final_bf.split(&offset, &self.secp)
+                .unwrap()
+                .secret_key(&self.secp)
+                .unwrap();
             let mut ctx : Context = Context{
                 parent_key_id: Identifier::zero(),
-                sec_key: bf_sum.clone(),
+                sec_key: final_key.clone(),
                 sec_nonce: sig_nonce.clone(),
-                initial_sec_key: out_bf.clone(),
+                initial_sec_key: final_bf.secret_key(&self.secp)
+                    .unwrap(),
                 initial_sec_nonce: sig_nonce.clone(),
                 output_ids: vec!(),
                 input_ids: vec!(),
@@ -137,9 +151,9 @@ impl GrinCore {
     
             Ok(SpendCoinsResult {
                 slate : slate,
-                sig_key : bf_sum.clone(),
+                sig_key : final_key.clone(),
                 sig_nonce : sig_nonce.clone(),
-                change_coin : MWCoin::new(&commitment, &out_bf, change_value)
+                change_coin : MWCoin::new(&commitment, &change_coin_key, change_value)
             })
         }
     }
@@ -163,25 +177,26 @@ impl GrinCore {
         }
 
         // Create new output coins
-        let out_bf = create_secret_key(&mut self.rng, &self.secp);
-        let out_bf_com = out_bf.clone();
-        let out_bf_prf = out_bf.clone();
+        let out_coin_key = create_secret_key(&mut self.rng, &self.secp);
+        let out_bf_com = out_coin_key.clone();
+        let out_bf_prf = out_coin_key.clone();
         let rew_nonce = create_secret_key(&mut self.rng, &self.secp);
         let prf_nonce = create_secret_key(&mut self.rng, &self.secp);
         let sig_nonce = create_secret_key(&mut self.rng, &self.secp);
         
-        let commitment = self.secp.commit(fund_value, out_bf_com)
+        println!("Creating output coin with value {}", fund_value);
+        let commitment = self.secp.commit(fund_value, out_coin_key.clone())
             .expect("Failed to generate pedersen commitment for recv_coins output coin");
-        let proof = self.secp.bullet_proof(fund_value, out_bf_prf, rew_nonce, prf_nonce, None, None);
+        let proof = self.secp.bullet_proof(fund_value, out_coin_key.clone(), rew_nonce, prf_nonce, None, None);
         let output = Output::new(OutputFeatures::Plain, commitment, proof);
 
         tx = tx.with_output(output);
         slate.tx = Some(tx);
         let mut ctx : Context = Context {
             parent_key_id: Identifier::zero(),
-            sec_key: out_bf.clone(),
+            sec_key: out_coin_key.clone(),
             sec_nonce: sig_nonce.clone(),
-            initial_sec_key: out_bf.clone(),
+            initial_sec_key: out_coin_key.clone(),
             initial_sec_nonce: sig_nonce.clone(),
             output_ids: vec!(),
             input_ids: vec!(),
@@ -200,7 +215,7 @@ impl GrinCore {
         
         Ok(RecvCoinsResult {
             slate : slate,
-            output_coin : MWCoin::new(&commitment, &out_bf, fund_value)
+            output_coin : MWCoin::new(&commitment, &out_coin_key, fund_value)
         })
     }
 
@@ -245,7 +260,7 @@ impl GrinCore {
 
 #[cfg(test)]
 mod test {
-    use crate::grin::{grin_routines::{*}, grin_types::MWCoin};
+    use crate::{constants::NANO_GRIN, grin::{grin_routines::{*}, grin_types::MWCoin}};
     use crate::grin::grin_core::GrinCore;
     use grin_wallet_libwallet::Slate;
     use grin_core::global::{set_local_chain_type, ChainTypes};
@@ -254,12 +269,13 @@ mod test {
     fn test_spend_coins() {
         // Should create a pre-transaction with transaction value 600
         let mut core = GrinCore::new();
+        let fund_value = grin_to_nanogrin(2);
         let coin = MWCoin {
             commitment : String::from("086061571ea044365c81b5232c261866265024bd5c3506b5526d80df0c6c5845c8"),
             blinding_factor : String::from("1682c7950a19dfbc2f2c409ff9517cc72d2bf1ffa9ab1f83746e843461e1112c"),
-            value : 50000
+            value : fund_value * 2
         };
-        let result = core.spend_coins(vec!(coin), 600, 20, 0).unwrap();
+        let result = core.spend_coins(vec!(coin), fund_value, 0, 2).unwrap();
         let ser = serde_json::to_string(&result.slate).unwrap();
         assert_eq!(50000 - 600 - 20, result.change_coin.value);
         assert_eq!(600, result.slate.amount);
@@ -285,29 +301,30 @@ mod test {
 
     #[test]
     fn test_fin_tx() {
+        let fund_value = grin_to_nanogrin(2);
         let mut core = GrinCore::new();
-        let fund_value = 600;
-        let fee = = 20;
-        let coin = MWCoin {
-            commitment : String::from("086061571ea044365c81b5232c261866265024bd5c3506b5526d80df0c6c5845c8"),
-            blinding_factor : String::from("1682c7950a19dfbc2f2c409ff9517cc72d2bf1ffa9ab1f83746e843461e1112c"),
-            value : 50000
-        };
-        let result1 = core.spend_coins(vec!(coin), fund_value, 20, 0).unwrap();
-        println!("sec_key: {} nonce: {}", serialize_secret_key(&result1.sig_key), serialize_secret_key(&result1.sig_nonce));
-        let result2 = core.recv_coins(result1.slate, fund_value).unwrap();
-        let ser = serde_json::to_string(&result2.slate).unwrap();
-        println!("{}", ser);
-        /**
-        set_local_chain_type(ChainTypes::AutomatedTesting);
-        let sec_key = deserialize_secret_key(&String::from("f87c62b6b7e57fb00db05755fd3e167f8ddb208f3e9cca08ed5ab2d1c5edc084"), &core.secp);
-        let sec_nonce = deserialize_secret_key(&String::from("29aca6fe1f51683721d56fdb3a5168f18fd5e2e34aeef1ba9708ce5ad99c6020"), &core.secp);
-        let str_slate = r#"{"ver":"4:3","id":"4146ae0d-d100-4608-8241-0a2e40c9c1ed","sta":"S1","amt":"600","fee":"20","sigs":[{"xs":"0264041944239ebce4fa774469aaeb8990335942b8ba34fd1fd5d8d080a5c40d61","nonce":"02e4fb420a8ba5ddaa31cd6ad1c85c766fb41b887a5f7ad5b9e1cfeff3c6f08a9b"},{"xs":"0379062090e060911a0e71b6ef768b3828f6f5476e6bd6e151455611027f3e6b46","nonce":"02b08a5503bb5b5cc1a0dcdda994e3e4b077f1941752b7385a392012917477c41c","part":"1cc47774911220395a38b7521794f177b0e4e394a9dddca0c15c5bbb03558ab0f048673735088da439ef499233632e727a6f84ba37dd00b852f90e97e23db636"}],"coms":[{"c":"086061571ea044365c81b5232c261866265024bd5c3506b5526d80df0c6c5845c8"},{"c":"0928f0adc04373eda0dcb4a40b447efda1147625627c1d553a526ba7c26b6595cf","p":"bdbd83b31c947b4edb51b4a00e0a12ae682563f44933744673eb6afae97fc1e2b68d0a925704542dfd422786c547f8b7af2ff88ac0177e41c4692adaeaf9ab2b0f9f30d00a2834cea6d4f682dc2a962eac6c53df5167f830271fc052bc87913ffe6399ea6ac13f50bb53ff81232540d0d6bb167db7810620b9af87c537aed11f983f8355f7d6853fabe5d1da513389b8bc475a3dd274a94ab0878039d08dfbe4af834ef53db94e27bd1e7b902a407d3c3321d67b392303a071d0a1cb1c714a76903e69eceb1c0fb79268f3bae2a3264e77fc8ae2e4fdc690622479b87e6e6acfd14992dd34dcfa722be69ffdd65165f76fe4931584b0961d441f0da67c70a8af64fcbe338b38d9244ca2b2aafe16202a866a00f070bf18b3c77d011ff94090406ba823d50cbc9f8a2f2815c6e2cae833b469af9bab1b2b71c2f4283c6da96a99a67f8aedd9ea097707f1b24e3928dc15fb671ee26a7625d31b978274b111025e6c4702de54e01e3339d1aa1690beee14508602d9beedd61732aa64e13f9e8bc9c3e74a468e8fc6107df1fb70631f90d33c51221bc6f9817e7b9ce83d03751a7c1eff29f745dbf00fa409199c6849a3cc212826cfc88e8e0fa99fa182f321e4c037f86255fa82d2cc7fdb1c467ae04a38c581b5a897dbe7f94f136d6c7f506599a4730841dbda4f96037c96888b480a23e10abe2aadcc220890f7dd963f8d6914a473056032210fcbfc31c66b95f1ac3d9e7e525683bbcada6e75c37efa8d3daff189b310d50bc72eeca9cf22591e94bb446d251348230c1f2c3b49fe3a29ecc50874045ffe979d264472e7dd77566f22093f0b9c17dcd703ac6275d82c276971a693963511321d67e93c5aace7a6bdc8064fb669cb0f7a2807db773a370ff9a723119b7b24a3a759b50640a800cc55bed264f62312217f13bc49da00a7f8d382a8b08c"},{"c":"09ace521cf8a98b62efbffbc799ba9721202437026e89593563878a3a52243f9f1","p":"358cae0b9aade44ca427618c23a64cf563cfe32daa32e730383047df2aba8686bf7e4df279374da2b4461220f0225441d160054627926f62396d4073d76814cd0e2924901f48dbe4b8d9489e19cb8b946c64a1e12a1ab108946da35df935976ad2a574b85ef4c575243d83f0285f7a3423cb2bea04a50e5822faf1c78f55983e63e0ada967b2180f90379c38a5e7e4a8544978370f0c39c180a5708b2a2e7f10bc88cbd619800104a642de80b1b3314f1e69503773e038c1478aeab6eda46d669c8527ba6c7917ee7b893f20a1036a6be5deefe561fe1b3acda8101819fbc0597e3c85962e3c89013db61230d34a47ec0dc086cf7f43847a4b345363b481ad2caf8d654a25640ea1a7e87f64b58d3371ff88ac3fa04cf9e2fc573dd39007c68e67cd3b73881dc8e14477398c78c333a2bbbf84302035116d829e86f9ac3fb99b435f6dbcaede5215d962c05e3143bd41e8feef91af0b0cef7f6aebb6c9fad37c3b61006117554b2f56c192080adc13100798b48ff07a18674106331f633af2a40d6e4fa7c3fdb5f85af65819318973ee46e91704c101dadf02b23e2477a7b7dcb5c50462a73ea748079a55a30d7031d3284ffd915114cf84719c4101b59f5370e296544a6697b85f96c411a4d14efa17e014254981699ccc8bbe6bf43edab5784060777ddfe10b6a759c109f91335c82f7e579d1aec8c3bbc131555594a5df23389d3132ea52a4d3db535c53388ac3f495455b34a3f6eec7a5e4d0ad800f07393c8e17b6964ad6d99ff2e73a7de0ce75ab233b22bd029d33829ddddeae6e9789cf6061c726b00276f73cb0bcde221beb21cdd6ede95d6a7b989b168df67d652b5f9acba63e54e836186163efabcbf3230c9fb4566d80037de4d4ad010a2256d52509aebf030b48c30979d23d60520713fff15a9df78c972fedd8cdb58dfc9fb14e9476"}]}"#;
-        let slate = Slate::deserialize_upgrade(&str_slate).unwrap();
 
-        let fin_slate = core.fin_tx(slate, &sec_key, &sec_nonce).unwrap();
+        // Create some valid input coin
+        let input_val = fund_value * 2;
+        let input_bf = create_secret_key(&mut core.rng, &core.secp);
+        let commitment = core.secp.commit(fund_value, input_bf.clone()).unwrap();
+        let coin = MWCoin {
+            commitment : serialize_commitment(&commitment),
+            blinding_factor : serialize_secret_key(&input_bf),
+            value : input_val
+        };
+
+        set_local_chain_type(ChainTypes::AutomatedTesting);
+        let result1 = core.spend_coins(vec!(coin), fund_value,  0, 2).unwrap();
+        println!("sec_key: {} nonce: {}", serialize_secret_key(&result1.sig_key), serialize_secret_key(&result1.sig_nonce));
+        println!("slate after spend coins : {}", serde_json::to_string(&result1.slate).unwrap());
+        let mut result2 = core.recv_coins(result1.slate, fund_value).unwrap();
+        println!("slate after recv coins : {}", serde_json::to_string(&result2.slate).unwrap());
+        let sec_key = result1.sig_key;
+        let sec_nonce = result1.sig_nonce;
+        result2.slate.update_kernel().unwrap();
+        let fin_slate = core.fin_tx(result2.slate, &sec_key, &sec_nonce).unwrap();
         let ser = serde_json::to_string(&fin_slate).unwrap();
-        println!("{}", ser);
-        */
+        println!("final slate: {}", ser);
     }
 }

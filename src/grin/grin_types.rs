@@ -11,6 +11,12 @@ pub struct MWCoin {
 }
 
 impl MWCoin {
+    /// Create a new Grin spendable coin
+    /// # Arguments
+    ///
+    /// * `commitment` the coin pedersen commitment
+    /// * `blinding_factor` blinding factor used in the commitment
+    /// * `value` coin value as nanogrins
     pub fn new(commitment : &Commitment, blinding_factor : &SecretKey, value : u64) -> MWCoin {
         let enc_com = serialize_commitment(commitment);
         let enc_bf = serialize_secret_key(blinding_factor);

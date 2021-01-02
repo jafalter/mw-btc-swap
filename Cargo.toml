@@ -17,12 +17,11 @@ hex = "0.4.2"
 reqwest = { version = "0.10", features = ["json","blocking"] }
 tokio = { version = "0.2", features = ["full"] }
 
-#grin_wallet_libwallet = "2.1.0"
-#grin_util = "2.1.0"
-#grin_core = "2.1.0"
-#grin_keychain = "2.1.0"
+#grin_core = { path = "./grin/core" }
+#grin_util = { path = "./grin/util" }
+#grin_keychain = { path = "./grin/keychain" }
 grin_core = { git = "https://github.com/mimblewimble/grin", tag = "v5.0.0-rc.1" }
-grin_wallet_libwallet = { git = "https://github.com/mimblewimble/grin-wallet", tag = "v5.0.0-rc.1" }
+grin_wallet_libwallet = { path = "grin-wallet/libwallet"}
 grin_util = { git = "https://github.com/mimblewimble/grin", tag = "v5.0.0-rc.1" }
 grin_keychain = { git = "https://github.com/mimblewimble/grin", tag = "v5.0.0-rc.1" }
 
