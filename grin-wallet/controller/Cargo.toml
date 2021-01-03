@@ -1,0 +1,41 @@
+[package]
+name = "grin_wallet_controller"
+version = "5.0.0-rc.1"
+authors = ["Grin Developers <mimblewimble@lists.launchpad.net>"]
+description = "Controllers for grin wallet instantiation"
+license = "Apache-2.0"
+repository = "https://github.com/mimblewimble/grin-wallet"
+keywords = [ "crypto", "grin", "mimblewimble" ]
+exclude = ["**/*.grin", "**/*.grin2"]
+#build = "src/build/build.rs"
+edition = "2018"
+
+[dependencies]
+failure = "0.1"
+failure_derive = "0.1"
+futures = "0.3"
+hyper = "0.13"
+rand = "0.7"
+serde = "1"
+serde_derive = "1"
+serde_json = "1"
+log = "0.4"
+prettytable-rs = "0.8"
+ring = "0.16"
+term = "0.6"
+tokio = { version = "0.2", features = ["full"] }
+uuid = { version = "0.8", features = ["serde", "v4"] }
+url = "2.1"
+chrono = { version = "0.4.11", features = ["serde"] }
+easy-jsonrpc-mw = "0.5.4"
+lazy_static = "1"
+
+grin_wallet_util = { path = "../util", version = "5.0.0-rc.1" }
+
+grin_wallet_api = { path = "../api", version = "5.0.0-rc.1" }
+grin_wallet_impls = { path = "../impls", version = "5.0.0-rc.1" }
+grin_wallet_libwallet = { path = "../libwallet", version = "5.0.0-rc.1" }
+grin_wallet_config = { path = "../config", version = "5.0.0-rc.1" }
+
+[dev-dependencies]
+ed25519-dalek = "1.0.0-pre.4"

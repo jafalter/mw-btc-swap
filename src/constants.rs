@@ -1,5 +1,9 @@
+// conversion rate from btx to sats
+pub const BTC_SATS : u64 = 100000000;
+// conversion rate from grin to nanogrin
+pub const NANO_GRIN : u64 = 1000000000;
 // theoretical max limit of grin offered to swap in NanoGrin
-pub const GRIN_MAX_NANOGRIN : u64 = 10000000 * 1000000000; 
+pub const GRIN_MAX_NANOGRIN : u64 = 10000000 * NANO_GRIN; 
 // theoretical max limit of btc offered to swap in Satoshis
 pub const BTC_MAX_SATS : u64 = 21000000 * 100000000;
 // 5 days max timeout (in minutes)
