@@ -131,6 +131,7 @@ impl GrinCore {
                 .unwrap()
                 .secret_key(&self.secp)
                 .unwrap();
+            //let final_key = final_bf.secret_key(&self.secp).unwrap();
             let mut ctx : Context = Context{
                 parent_key_id: Identifier::zero(),
                 sec_key: final_key.clone(),
@@ -178,8 +179,6 @@ impl GrinCore {
 
         // Create new output coins
         let out_coin_key = create_secret_key(&mut self.rng, &self.secp);
-        let out_bf_com = out_coin_key.clone();
-        let out_bf_prf = out_coin_key.clone();
         let rew_nonce = create_secret_key(&mut self.rng, &self.secp);
         let prf_nonce = create_secret_key(&mut self.rng, &self.secp);
         let sig_nonce = create_secret_key(&mut self.rng, &self.secp);
@@ -307,7 +306,7 @@ mod test {
         // Create some valid input coin
         let input_val = fund_value * 2;
         let input_bf = create_secret_key(&mut core.rng, &core.secp);
-        let commitment = core.secp.commit(fund_value, input_bf.clone()).unwrap();
+        let commitment = core.secp.commit(input_val, input_bf.clone()).unwrap();
         let coin = MWCoin {
             commitment : serialize_commitment(&commitment),
             blinding_factor : serialize_secret_key(&input_bf),
