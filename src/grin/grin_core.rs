@@ -1,7 +1,7 @@
 use crate::grin::grin_routines::*;
 use crate::grin::grin_types::MWCoin;
 use crate::util::get_os_rng;
-use grin_core::core::transaction::FeeFields;
+use grin_core::core::{KernelFeatures, transaction::FeeFields};
 use grin_core::core::transaction::OutputFeatures;
 use grin_core::core::{Input, Inputs, Output, Transaction};
 use grin_core::libtx::tx_fee;
@@ -9,8 +9,7 @@ use grin_keychain::{BlindSum, BlindingFactor, ExtKeychain, Identifier, Keychain}
 use grin_util::secp::key::{PublicKey, SecretKey};
 use grin_util::secp::pedersen::Commitment;
 use grin_util::secp::{ContextFlag, Secp256k1};
-use grin_wallet_libwallet::Context;
-use grin_wallet_libwallet::Slate;
+use grin_wallet_libwallet::{Context, Slate, slate_versions::v4::{KernelFeaturesArgsV4, SlateV4}};
 use rand::rngs::OsRng;
 
 pub struct GrinCore {
@@ -57,7 +56,7 @@ impl GrinCore {
         &mut self,
         inputs: Vec<MWCoin>,
         fund_value: u64,
-        timelock: u32,
+        timelock: u64,
         num_of_outputs: usize,
     ) -> Result<SpendCoinsResult, String> {
         // Initial transaction slate
@@ -102,11 +101,24 @@ impl GrinCore {
             let out_bf = BlindingFactor::from_secret_key(change_coin_key.clone());
             blind_sum = blind_sum.add_blinding_factor(out_bf);
 
-            let feefield = FeeFields::new(0, fee).unwrap();
+            let fee_field = FeeFields::new(0, fee).unwrap();
             let mut tx = Transaction::empty();
-            slate.fee_fields = feefield;
+            slate.fee_fields = fee_field;
             slate.amount = fund_value;
             slate.offset = offset.clone();
+            
+            if timelock != 0 {
+                let kfeat = KernelFeatures::HeightLocked{
+                    fee : fee_field,
+                    lock_height: timelock
+                };
+                slate.kernel_features = kfeat.as_u8();
+                // TODO set KernelFeaturesArgs
+
+            }
+            else {
+                ()
+            }
 
             // Add the input coins
             let mut inp_vector: Vec<Input> = vec![];
@@ -166,7 +178,7 @@ impl GrinCore {
                 output_ids: vec![],
                 input_ids: vec![],
                 amount: fund_value,
-                fee: Some(feefield),
+                fee: Some(fee_field),
                 payment_proof_derivation_index: None,
                 late_lock_args: None,
                 calculated_excess: None,
@@ -185,6 +197,73 @@ impl GrinCore {
         }
     }
 
+    pub fn d_spend_coins(
+        &mut self,
+        inputs: Vec<MWCoin>,
+        mut slate : Slate,
+        fund_value : u64,
+        timelock : u64
+    ) -> Result<SpendCoinsResult, String> {
+        // Validate output coin rangeproofs
+        let tx = slate.tx.clone().unwrap_or_else(|| Transaction::empty());
+        for out in tx.outputs() {
+            let prf = out.proof;
+            let com = out.identifier.commit;
+            self.secp
+                .verify_bullet_proof(com, prf, None)
+                .expect("Failed to verify outputcoin rangeproof");
+        }
+
+        // Some more validations
+        if slate.amount != fund_value {
+            Err(String::from("Transaction amount found to be invalid"))
+        }
+        else if tx.inputs().len() != inputs.len() {
+            Err(String::from("Inputs don't match with coins given in parameters"))
+        }
+        else {
+            // TODO validate optional timelock
+
+            // Now we create the signing keys for this participant
+            let mut blind_sum = BlindSum::new();
+            for coin in inputs {
+                let inp_key = deserialize_secret_key(&coin.blinding_factor, &self.secp);
+                let inp_bf = BlindingFactor::from_secret_key(inp_key.clone());
+                blind_sum = blind_sum.sub_blinding_factor(inp_bf);
+            }
+            let final_key = self
+                .chain
+                .blind_sum(&blind_sum)
+                .expect("Failed to calculate final blinding factor sum")
+                .secret_key(&self.secp)
+                .unwrap();
+            let sig_nonce = create_secret_key(&mut self.rng, &self.secp);
+            let mut ctx: Context = Context {
+                parent_key_id: Identifier::zero(),
+                sec_key: final_key.clone(),
+                sec_nonce: sig_nonce.clone(),
+                initial_sec_key: final_key.clone(),
+                initial_sec_nonce: sig_nonce.clone(),
+                output_ids: vec![],
+                input_ids: vec![],
+                amount: fund_value.clone(),
+                fee: Some(slate.fee_fields),
+                payment_proof_derivation_index: None,
+                late_lock_args: None,
+                calculated_excess: None,
+            };
+            slate
+                .fill_round_1(&self.chain, &mut ctx)
+                .expect("Failed to complete round 1 on the senders turn");
+            Ok(SpendCoinsResult{
+                slate : slate,
+                sig_key : final_key.clone(),
+                sig_nonce : sig_nonce.clone(),
+                change_coin : None
+            })
+        }
+    }
+
     /// Implementation of the receive coins algorithm of the thesis
     /// Returns an updated pre-transaction (slate) with one partial signature added
     /// and a spendable output coins
@@ -192,14 +271,14 @@ impl GrinCore {
     /// # Arguments
     ///
     /// * `slate` the pre-transaction slate as received from the sender
-    /// * `fund_value` the value that should be transferred to the reciever
+    /// * `fund_value` the value that should be transferred to the reciever (IN NANO GRIN)
     pub fn recv_coins(
         &mut self,
         mut slate: Slate,
         fund_value: u64,
     ) -> Result<RecvCoinsResult, String> {
         // Validate output coin rangeproofs
-        let mut tx = slate.tx.unwrap();
+        let mut tx = slate.tx.unwrap_or_else(|| Transaction::empty());
         for out in tx.outputs() {
             let prf = out.proof;
             let com = out.identifier.commit;
@@ -318,7 +397,7 @@ mod test {
         global::{set_local_chain_type, ChainTypes},
     };
     use grin_util::RwLock;
-    use grin_wallet_libwallet::Slate;
+    use grin_wallet_libwallet::{Slate, Slatepacker, SlatepackerArgs};
 
     #[test]
     fn test_spend_coins() {
@@ -534,5 +613,27 @@ mod test {
         let fin_slate = core.fin_tx(result2.slate, &sec_key, &sec_nonce).unwrap();
         let ser = serde_json::to_string(&fin_slate).unwrap();
         println!("final slate: {}", ser);
+    }
+
+    #[test]
+    fn read_from_slatepack() {
+        set_local_chain_type(ChainTypes::AutomatedTesting);
+        let mut core = GrinCore::new();
+        let slatepack_str = String::from(r#"BEGINSLATEPACK. GQmH7GaNdFzjNDP VgqoBqELw9Kmsxi DjhjrGAbsnYWpY3 FM5zzhBoZiMZyrY ZG4znjJK6aMKWL4 3SNNbGZmXcLFU5o mprDxKfc9WePH5n uiM2uCevD2KxfPh Nu4gU2f5LjdmWF8 yvvaUpbfqTMbnm5 RG89Chwh7jrGP4o zXDn2ST1QN3fWkB NPuhUVjrk9Xbndi qJXUQFXicc5vWsd C6jusT7rXyDhrYN 2vPaZGGWVewdRPg egKi6oDthxb5uvw pGWW4vq6amxzjTv jhtqU5DXqjHm2VK TswZQsTWPw8c64G rz21D4s. ENDSLATEPACK."#);
+        let packer = Slatepacker::new(SlatepackerArgs{sender: None, recipients: vec![], dec_key: None});
+        let slatepack = packer.deser_slatepack(&slatepack_str.into_bytes(), false)
+            .unwrap();
+        let slate = packer.get_slate(&slatepack)
+            .unwrap();
+        let slate_str = serde_json::to_string(&slate).unwrap();
+        println!("decoded slate: {}", slate_str);
+        let result = core.recv_coins(slate, grin_to_nanogrin(2))
+            .unwrap();
+        let ser = serde_json::to_string(&result.slate).unwrap();
+        println!("final slate: {}", ser);
+        println!("commitment: {}, blinding factor: {}, value: {}", &result.output_coin.commitment, &result.output_coin.blinding_factor, result.output_coin.value);
+        let upt_slatepack = packer.create_slatepack(&result.slate).unwrap();
+        let ser_pack = serde_json::to_string(&upt_slatepack).unwrap();
+        println!("slatepack: {}", &ser_pack);
     }
 }
