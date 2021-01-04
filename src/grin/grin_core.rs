@@ -52,15 +52,17 @@ impl GrinCore {
     /// * `fund_value` value which should be transferred to a receiver (IN NANO GRIN)
     /// * `fee` transaction fee
     /// * `timelock` optional transaction timelock
+    /// * `num_participants` number of participants in the usual case this would be 2, if we intend to create or spend a multiouput then it should be 3 or 4
     pub fn spend_coins(
         &mut self,
         inputs: Vec<MWCoin>,
         fund_value: u64,
         timelock: u64,
         num_of_outputs: usize,
+        num_participants : u8
     ) -> Result<SpendCoinsResult, String> {
         // Initial transaction slate
-        let mut slate = Slate::blank(2, false);
+        let mut slate = Slate::blank(num_participants, false);
         // Calculcate basefee based on number of inputs and expected outputs
         let fee = tx_fee(inputs.len(), num_of_outputs, 1);
         println!("Fee is {}", fee);
@@ -197,6 +199,16 @@ impl GrinCore {
         }
     }
 
+    /// Implementation of the dspendcoins algorithm as outlined in the thesis
+    /// To run the full protocol the first sender would have to call the regular spend coins function
+    /// The second one would then have to call this one
+    ///
+    /// # Arguments
+    /// 
+    /// * `inputs` the input coins containing the shares of the blinding factor
+    /// * `slate` Transaction slate as provided by the first sender
+    /// * `fund_value` amount that should be spend and transferred to a receiver
+    /// * `timelock` optional transaction height lock
     pub fn d_spend_coins(
         &mut self,
         inputs: Vec<MWCoin>,
@@ -414,7 +426,7 @@ mod test {
             value: input_val,
         };
 
-        let result = core.spend_coins(vec![coin], fund_value, 0, 2).unwrap();
+        let result = core.spend_coins(vec![coin], fund_value, 0, 2, 2).unwrap();
         let ser = serde_json::to_string(&result.slate).unwrap();
         let tx = result.slate.tx.unwrap();
         let fee: u64 = result.slate.fee_fields.fee(0);
@@ -430,7 +442,7 @@ mod test {
     fn test_spend_coin_no_inputs() {
         let mut core = GrinCore::new();
         let fund_value = grin_to_nanogrin(2);
-        core.spend_coins(vec![], fund_value, 0, 2).unwrap();
+        core.spend_coins(vec![], fund_value, 0, 2, 2).unwrap();
     }
 
     #[test]
@@ -447,7 +459,7 @@ mod test {
             blinding_factor: serialize_secret_key(&input_bf),
             value: input_val,
         };
-        core.spend_coins(vec![coin], fund_value, 0, 2).unwrap();
+        core.spend_coins(vec![coin], fund_value, 0, 2, 2).unwrap();
     }
 
     #[test]
@@ -464,7 +476,7 @@ mod test {
             blinding_factor: serialize_secret_key(&input_bf),
             value: input_val,
         };
-        core.spend_coins(vec![coin], fund_value, 0, 2).unwrap();
+        core.spend_coins(vec![coin], fund_value, 0, 2, 2).unwrap();
     }
 
     #[test]
@@ -486,7 +498,7 @@ mod test {
             blinding_factor: serialize_secret_key(&input_bf),
             value: input_val,
         };
-        core.spend_coins(vec![coin, coin2], fund_value, 0, 2).unwrap();
+        core.spend_coins(vec![coin, coin2], fund_value, 0, 2, 2).unwrap();
     }
 
     #[test]
@@ -593,7 +605,7 @@ mod test {
         };
 
         set_local_chain_type(ChainTypes::AutomatedTesting);
-        let result1 = core.spend_coins(vec![coin], fund_value, 0, 2).unwrap();
+        let result1 = core.spend_coins(vec![coin], fund_value, 0, 2,2).unwrap();
         println!(
             "sec_key: {} nonce: {}",
             serialize_secret_key(&result1.sig_key),
