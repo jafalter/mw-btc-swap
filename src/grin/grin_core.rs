@@ -353,6 +353,28 @@ impl GrinCore {
             output_coin: MWCoin::new(&commitment, &out_coin_key, fund_value),
         })
     }
+    
+
+    pub fn drecv_coins(
+        &mut self,
+        mut slate: Slate,
+        fund_value: u64,
+        ix : u32
+    ) -> Result<RecvCoinsResult, String> {
+        // Validate output coin rangeproofs
+        let mut tx = slate.tx.unwrap_or_else(|| Transaction::empty());
+        for out in tx.outputs() {
+            let prf = out.proof;
+            let com = out.identifier.commit;
+            self.secp
+                .verify_bullet_proof(com, prf, None)
+                .expect("Failed to verify outputcoin rangeproof");
+        }
+
+        // We now add our blinding factor to the output coin
+        let 
+    }
+
 
     /// Implementation of the finTx algorithm outlined in the thesis
     /// Returns the final transaction slate which can be broadcast to a Grin node
