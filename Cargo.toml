@@ -24,6 +24,3 @@ grin_core = { git = "https://github.com/mimblewimble/grin", tag = "v5.0.0-rc.1" 
 grin_wallet_libwallet = { path = "grin-wallet/libwallet"}
 grin_util = { git = "https://github.com/mimblewimble/grin", tag = "v5.0.0-rc.1" }
 grin_keychain = { git = "https://github.com/mimblewimble/grin", tag = "v5.0.0-rc.1" }
-
-[patch.crates-io]
-grin_secp256k1zkp = { git = "https://github.com/jaspervdm/rust-secp256k1-zkp", branch = "master" }
