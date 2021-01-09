@@ -7,7 +7,7 @@ use grin_util::secp::{
 };
 use rand::rngs::OsRng;
 
-use crate::{constants::NANO_GRIN, util::get_os_rng};
+use crate::{bitcoin::btcroutines::create_private_key, constants::NANO_GRIN, util::get_os_rng};
 
 pub struct MPBPContext {
     t_1: PublicKey,
@@ -27,7 +27,7 @@ impl MPBPContext {
             t_1: PublicKey::new(),
             t_2: PublicKey::new(),
             amount: amount,
-            shared_nonce: shared_nonce,
+            shared_nonce: shared_nonce.clone(),
             tau_x: ZERO_KEY,
             rng: rng,
             secp: secp,
@@ -118,41 +118,34 @@ pub fn grin_to_nanogrin(value: u64) -> u64 {
 pub fn mp_bullet_proof_r1(
     mut ctx: MPBPContext,
     blind: SecretKey,
-    sec_nonce: &SecretKey,
+    sec_nonce: SecretKey,
     commit: Commitment,
 ) -> Result<MPBPContext, String> {
-    // These will be filled during the round
-    let mut t_1 = PublicKey::new();
-    let mut t_2 = PublicKey::new();
     let message: Option<ProofMessage> = None;
     let extra_data: Option<Vec<u8>> = None;
     let mut commits = vec![];
     commits.push(commit);
 
-    println!("amount: {}", ctx.amount);
-    println!("blind: {}", serialize_secret_key(&blind.clone()));
-    println!(
-        "shared_nonce: {}",
-        serialize_secret_key(&ctx.shared_nonce.clone())
-    );
-    println!("commit: {}", serialize_commitment(&commit));
-    println!("sec_nonce: {}", serialize_secret_key(&sec_nonce));
+    let shared_nonce = create_secret_key(&mut ctx.rng, &ctx.secp);
 
+    // These will be filled during the round
+    let mut t_1 = PublicKey::new();
+    let mut t_2 = PublicKey::new();
     ctx.secp.bullet_proof_multisig(
         ctx.amount,
         blind.clone(),
-        ctx.shared_nonce.clone(),
-        extra_data,
-        message,
+        shared_nonce.clone(),
+        extra_data.clone(),
+        message.clone(),
         None,
         Some(&mut t_1),
         Some(&mut t_2),
         commits.clone(),
-        Some(sec_nonce),
+        Some(&sec_nonce),
         1,
     );
-    ctx.add_t_1(&t_1);
-    ctx.add_t_2(&t_2);
+    //ctx.add_t_1(&t_1);
+    //ctx.add_t_2(&t_2);
     Ok(ctx)
 }
 
@@ -264,12 +257,12 @@ mod test {
         // Setup
         let mut rng = get_os_rng();
         let secp = Secp256k1::with_caps(ContextFlag::Commit);
-        let bf_a = create_secret_key(&mut rng, &secp);
-        let bf_b = create_secret_key(&mut rng, &secp);
-        let sec_nonce_a = create_secret_key(&mut rng, &secp);
-        let sec_nonce_b = create_secret_key(&mut rng, &secp);
-        let amount = grin_to_nanogrin(2);
-        let shared_nonce = create_secret_key(&mut rng, &secp);
+        let bf_a = SecretKey::new(&secp, &mut get_os_rng());
+        let bf_b = SecretKey::new(&secp, &mut get_os_rng());
+        let sec_nonce_a = SecretKey::new(&secp, &mut get_os_rng());
+        let sec_nonce_b = SecretKey::new(&secp, &mut get_os_rng());
+        let amount = 12345678;
+        let shared_nonce = SecretKey::new(&secp, &mut get_os_rng());
         let ctx = MPBPContext::new(shared_nonce, amount);
         let commit_a = secp.commit(amount, bf_a.clone()).unwrap();
         let commit_b = secp.commit(0, bf_b.clone()).unwrap();
@@ -277,9 +270,10 @@ mod test {
 
         println!("Starting round 1");
         // Round 1
-        let ctx = mp_bullet_proof_r1(ctx, bf_a.clone(), &sec_nonce_a, commit.clone()).unwrap();
+        let ctx = mp_bullet_proof_r1(ctx, bf_a.clone(), sec_nonce_a.clone(), commit.clone()).unwrap();
         println!("Completed round 1 A");
-        let ctx = mp_bullet_proof_r1(ctx, bf_b.clone(), &sec_nonce_b, commit.clone()).unwrap();
+        
+        let ctx = mp_bullet_proof_r1(ctx, bf_b.clone(), sec_nonce_b.clone(), commit.clone()).unwrap();
         println!("Completed round 1 B");
 
         // Round 2
