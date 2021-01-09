@@ -360,7 +360,7 @@ impl GrinCore {
         mut slate: Slate,
         fund_value: u64,
         ix : u32
-    ) -> Result<RecvCoinsResult, String> {
+    ) {
         // Validate output coin rangeproofs
         let mut tx = slate.tx.unwrap_or_else(|| Transaction::empty());
         for out in tx.outputs() {
@@ -372,7 +372,6 @@ impl GrinCore {
         }
 
         // We now add our blinding factor to the output coin
-        let 
     }
 
 
