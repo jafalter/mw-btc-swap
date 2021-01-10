@@ -1,3 +1,5 @@
+use grin_core::core::FeeFields;
+use grin_keychain::Identifier;
 use grin_util::secp::pedersen::Commitment;
 use grin_util::secp::SecretKey;
 use grin_util::secp::{
@@ -5,6 +7,7 @@ use grin_util::secp::{
     pedersen::{ProofMessage, RangeProof},
     ContextFlag, PublicKey, Secp256k1,
 };
+use grin_wallet_libwallet::Context;
 use rand::rngs::OsRng;
 
 use crate::{bitcoin::btcroutines::create_private_key, constants::NANO_GRIN, util::get_os_rng};
@@ -12,15 +15,16 @@ use crate::{bitcoin::btcroutines::create_private_key, constants::NANO_GRIN, util
 pub struct MPBPContext {
     t_1: PublicKey,
     t_2: PublicKey,
-    amount: u64,
+    pub amount: u64,
     shared_nonce: SecretKey,
     tau_x: SecretKey,
     rng: OsRng,
     secp: Secp256k1,
+    pub commit: Commitment
 }
 
 impl MPBPContext {
-    fn new(shared_nonce: SecretKey, amount: u64) -> MPBPContext {
+    pub fn new(shared_nonce: SecretKey, amount: u64, com: Commitment) -> MPBPContext {
         let rng = get_os_rng();
         let secp = Secp256k1::with_caps(ContextFlag::Commit);
         MPBPContext {
@@ -31,7 +35,15 @@ impl MPBPContext {
             tau_x: ZERO_KEY,
             rng: rng,
             secp: secp,
+            commit: com
         }
+    }
+
+    pub fn add_commit(&mut self, c2 : Commitment) {
+        self.commit = self
+            .secp
+            .commit_sum(vec![self.commit,c2], vec![])
+            .unwrap()
     }
 
     fn add_t_1(&mut self, t_1: PublicKey) {
@@ -85,6 +97,30 @@ pub fn deserialize_secret_key(key: &String, secp: &Secp256k1) -> SecretKey {
         &hex::decode(key).expect("Failed to deserialize a secret key from hex string"),
     )
     .expect("Failed to deserialize a secret key from hex string")
+}
+
+//// Create a minimal context object needed for Slate fill_round_1
+///
+/// # Arguments
+/// * `sec_key` the secret key used by this participant
+/// * `sec_nonce` the secrent nonce used by this participant (for the signature)
+/// * `amount` transaction amount
+/// * `fee` the transaction fees
+pub fn create_minimal_ctx(sec_key : SecretKey, sec_nonce : SecretKey, amount: u64, fee: FeeFields) -> Context {
+    Context {
+        parent_key_id: Identifier::zero(),
+        sec_key: sec_key.clone(),
+        sec_nonce: sec_nonce.clone(),
+        initial_sec_key: sec_key.clone(),
+        initial_sec_nonce: sec_nonce.clone(),
+        output_ids: vec![],
+        input_ids: vec![],
+        amount: amount,
+        fee: Some(fee),
+        payment_proof_derivation_index: None,
+        late_lock_args: None,
+        calculated_excess: None
+    }
 }
 
 /// Serialize a pedersen commitment to a hex encoded string
@@ -167,7 +203,6 @@ pub fn mp_bullet_proof_r1(
 pub fn mp_bullet_proof_r2(
     mut ctx: MPBPContext,
     blind: SecretKey,
-    commit: Commitment,
     sec_nonce: SecretKey,
 ) -> Result<MPBPContext, String> {
     let mut tau_x = create_secret_key(&mut ctx.rng, &ctx.secp);
@@ -180,7 +215,7 @@ pub fn mp_bullet_proof_r2(
         Some(&mut tau_x),
         Some(&mut ctx.t_1.clone()),
         Some(&mut ctx.t_2.clone()),
-        vec![commit],
+        vec![ctx.commit],
         Some(&sec_nonce.clone()),
         2,
     );
@@ -199,7 +234,6 @@ pub fn mp_bullet_proof_r2(
 pub fn mp_bullet_proof_fin(
     mut ctx: MPBPContext,
     blind: SecretKey,
-    commit: Commitment,
     sec_nonce: SecretKey,
 ) -> Result<RangeProof, String> {
     let proof = ctx
@@ -213,7 +247,7 @@ pub fn mp_bullet_proof_fin(
             Some(&mut ctx.tau_x),
             Some(&mut ctx.t_1),
             Some(&mut ctx.t_2),
-            vec![commit],
+            vec![ctx.commit],
             Some(&sec_nonce.clone()),
             0,
         )
@@ -267,31 +301,32 @@ mod test {
         let sec_nonce_b = create_secret_key(&mut rng, &secp);
         let amount = grin_to_nanogrin(2);
         let shared_nonce = create_secret_key(&mut rng, &secp);
-        let ctx = MPBPContext::new(shared_nonce, amount);
         let commit_a = secp.commit(amount, bf_a.clone())
             .unwrap();
-        let commit_b = secp.commit(0, bf_b.clone())
-            .unwrap();
-        let commit = secp.commit_sum(vec![commit_a, commit_b], vec![])
-            .unwrap();
+        let mut ctx = MPBPContext::new(shared_nonce, amount, commit_a);
 
         // Round 1
-        let ctx = mp_bullet_proof_r1(ctx, bf_a.clone(), sec_nonce_a.clone())
+        ctx = mp_bullet_proof_r1(ctx, bf_a.clone(), sec_nonce_a.clone())
             .unwrap();
-        let ctx = mp_bullet_proof_r1(ctx, bf_b.clone(), sec_nonce_b.clone())
+        ctx = mp_bullet_proof_r1(ctx, bf_b.clone(), sec_nonce_b.clone())
             .unwrap();
+
+        let commit_b = secp.commit(0, bf_b.clone())
+            .unwrap();
+        ctx.add_commit(commit_b);
+        let com = ctx.commit.clone();
 
         // Round 2
-        let ctx = mp_bullet_proof_r2(ctx, bf_a.clone(), commit.clone(), sec_nonce_a.clone())
+        let ctx = mp_bullet_proof_r2(ctx, bf_a.clone(), sec_nonce_a.clone())
             .unwrap();
-        let ctx = mp_bullet_proof_r2(ctx, bf_b.clone(), commit.clone(), sec_nonce_b.clone())
+        let ctx = mp_bullet_proof_r2(ctx, bf_b.clone(), sec_nonce_b.clone())
             .unwrap();
 
-        let proof = mp_bullet_proof_fin(ctx, bf_a.clone(), commit.clone(), sec_nonce_a.clone())
+        let proof = mp_bullet_proof_fin(ctx, bf_a.clone(), sec_nonce_a.clone())
             .unwrap();
 
         assert!(secp
-            .verify_bullet_proof(commit.clone(), proof.clone(), None)
+            .verify_bullet_proof(com, proof.clone(), None)
             .is_ok());
     }
 
