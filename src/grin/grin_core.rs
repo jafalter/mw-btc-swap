@@ -367,6 +367,18 @@ impl GrinCore {
         })
     }
 
+    /// Implementation of the dRecvCoins Algorithm round one
+    /// In this round the first participant create his partial commitment,
+    /// initiliazes the rangeproof protocol (running the first round there),
+    /// and adding his participant data to the transaction slate.
+    /// This round needs to be called only once by the participant who received the
+    /// slate from the sender.
+    /// The functions returns an updated slate, the proof context and blinding factor +
+    /// nonce values
+    ///
+    /// # Arguments
+    /// * `slate` the slate as received from the sender
+    /// * `fund_value` amount of funds which should be received (in nanogrin)
     pub fn drecv_coins_r1(
         &mut self,
         mut slate: Slate,
@@ -418,10 +430,23 @@ impl GrinCore {
         })
     }
 
+    /// Implementation of the dRecvCoins algorithm round 2
+    /// In this round the second participant (having received the output of round 1
+    /// of this protocol) adds his data to transaction slate, runs round 1 and round 2
+    /// of the multiparty bulletproof protocol and adds his commitment to the
+    /// output coin commitment, as well as his partial signature. This round of the protocol only needs to be run
+    /// one single time by the party who did not run round 1.
+    /// The function returns an updated slate, the participants share of the output coins
+    /// and an updated multiparty rangeproof contex.
+    ///
+    /// # Arguments
+    /// * `slate` the slate as returned from the call to round 1 of the protocol
+    /// * `fund_value` the value of the output coin
+    /// * `prf_ctx` the mutliparty bulletproof context
     pub fn drecv_coins_r2(
         &mut self,
         mut slate: Slate,
-        fund_value : u64,
+        fund_value: u64,
         mut prf_ctx: MPBPContext,
     ) -> Result<(RecvCoinsResult, MPBPContext), String> {
         // Validate senders output coins
@@ -449,44 +474,71 @@ impl GrinCore {
         // T1 and T2 and the commitment are now finalized we can start round 2
         prf_ctx = mp_bullet_proof_r2(prf_ctx, out_coin_blind.clone(), prf_nonce.clone())
             .expect("Failed to run round 2A of mp bulletproofs");
-        
-        slate.fill_round_1(
-            &self.chain, 
-            &mut create_minimal_ctx(out_coin_blind.clone(), sig_nonce.clone(), fund_value, slate.fee_fields))
+
+        slate
+            .fill_round_1(
+                &self.chain,
+                &mut create_minimal_ctx(
+                    out_coin_blind.clone(),
+                    sig_nonce.clone(),
+                    fund_value,
+                    slate.fee_fields,
+                ),
+            )
             .expect("Failed to run fill_round_1 on drecv_coins_r2");
 
         // Now we are ready to create the first partial signature
-        slate.fill_round_2(
-            &self.chain, 
-            &out_coin_blind, 
-        &sig_nonce)
+        slate
+            .fill_round_2(&self.chain, &out_coin_blind, &sig_nonce)
             .expect("Failed to run fill_round_2 on drecv_coins_r2");
 
         let coin = MWCoin::new(&com, &out_coin_blind, fund_value);
-        Ok((RecvCoinsResult{
-            slate : slate,
-            output_coin: coin
-        }, prf_ctx))
+        Ok((
+            RecvCoinsResult {
+                slate: slate,
+                output_coin: coin,
+            },
+            prf_ctx,
+        ))
     }
 
+    /// Implementation of the dRecvCoins protocol round 3.
+    /// This round needs to be run by the participant who run round 1 and
+    /// not the second participant who ran round 2.
+    /// It will finalize the output coins rangeproof, add the final output
+    /// coin to the transaction and add the participants partial signature
+    /// it returns an updated transaction slate which can be returned
+    /// to the sender
+    ///
+    /// # Arguments
+    /// * `slate` updated slate as of after running round 2 of the protocol
+    /// * `prf_ctx` updated proof context as of after running round 2 of the protocol
+    /// * `fund_value` the fund value of the output coin
+    /// * `out_coin_blind` share of the output coin blinding factor
+    /// * `prf_nonce` the nonce used in the rangeproof
+    /// * `sig_nonce` the nonce used for the signature creation
     pub fn drecv_coins_r3(
         &mut self,
         mut slate: Slate,
         mut prf_ctx: MPBPContext,
-        fund_value: u64,
         out_coin_blind: SecretKey,
         prf_nonce: SecretKey,
+        sig_nonce: SecretKey,
     ) -> Result<Slate, String> {
-        let sig_nonce = create_secret_key(&mut self.rng, &self.secp);
         let commit = prf_ctx.commit.clone();
+        // Run round 2 of the the mp bulletproof protocol
+        prf_ctx = mp_bullet_proof_r2(prf_ctx, out_coin_blind.clone(), prf_nonce.clone())
+            .expect("failed to run round 2 of mp_bullet_proof");
         // Finalize the bulletproof
         let proof = mp_bullet_proof_fin(prf_ctx, out_coin_blind.clone(), prf_nonce.clone())
             .expect("Failed to finalize mp bulletproof");
         let output = Output::new(OutputFeatures::Plain, commit, proof);
         let mut tx = slate.tx.unwrap();
-        let tx = tx.with_output(output);
+        tx = tx.with_output(output);
         slate.tx = Some(tx);
-        slate.fill_round_2(&self.chain, &out_coin_blind.clone(), &sig_nonce.clone());
+        slate
+            .fill_round_2(&self.chain, &out_coin_blind.clone(), &sig_nonce.clone())
+            .unwrap();
 
         slate
             .update_kernel()
@@ -502,39 +554,32 @@ impl GrinCore {
     /// * `slate` the pre-transaction slate as provided to the sender by the receiver
     /// * `sec_key` the senders signing key
     /// * `sec_nonce` the senders signing nonce
+    /// * `finalize` if we should finalize the transaction (set it to false if there are further signatures coming i.e. in the dSpendCoins case)
     pub fn fin_tx(
         &mut self,
         mut slate: Slate,
         sec_key: &SecretKey,
         sec_nonce: &SecretKey,
+        finalize: bool,
     ) -> Result<Slate, String> {
         // First we verify output coin rangeproofs
-        let mut valid = true;
-        match slate.tx {
-            Some(ref tx) => {
-                for out in tx.outputs() {
-                    let prf = out.proof;
-                    let com = out.identifier.commit;
-                    self.secp
-                        .verify_bullet_proof(com, prf, None)
-                        .expect("Failed to verify outputcoin rangeproof");
-                }
-            }
-            None => {
-                valid = false;
-            }
-        };
-        if valid {
-            slate
-                .fill_round_2(&self.chain, sec_key, sec_nonce)
-                .expect("Failed to complete round 2 on senders turn");
+        let tx = slate.tx.clone().unwrap();
+        for out in tx.outputs() {
+            let prf = out.proof;
+            let com = out.identifier.commit;
+            self.secp
+                .verify_bullet_proof(com, prf, None)
+                .expect("Failed to verify outputcoin rangeproof");
+        }
+        slate
+            .fill_round_2(&self.chain, sec_key, sec_nonce)
+            .expect("Failed to complete round 2 on senders turn");
+        if finalize {
             slate
                 .finalize(&self.chain)
                 .expect("Failed to finalize transaction");
-            Ok(slate)
-        } else {
-            Err(String::from("Invalid transaction supplied to fin_tx call"))
         }
+        Ok(slate)
     }
 }
 
@@ -684,7 +729,7 @@ mod test {
             &core.secp,
         );
         let slate = Slate::deserialize_upgrade(&str_slate).unwrap();
-        let fin_slate = core.fin_tx(slate, &sk, &nonce).unwrap();
+        let fin_slate = core.fin_tx(slate, &sk, &nonce, true).unwrap();
         let ser = serde_json::to_string(&fin_slate).unwrap();
         println!("final slate: {}", ser);
         let verifier_cache = Arc::new(RwLock::new(LruVerifierCache::new()));
@@ -712,7 +757,7 @@ mod test {
             &core.secp,
         );
         let slate = Slate::deserialize_upgrade(&str_slate).unwrap();
-        core.fin_tx(slate, &sk, &nonce).unwrap();
+        core.fin_tx(slate, &sk, &nonce, true).unwrap();
     }
 
     #[test]
@@ -730,7 +775,7 @@ mod test {
             &core.secp,
         );
         let slate = Slate::deserialize_upgrade(&str_slate).unwrap();
-        core.fin_tx(slate, &sk, &nonce).unwrap();
+        core.fin_tx(slate, &sk, &nonce, true).unwrap();
     }
 
     #[test]
@@ -766,7 +811,87 @@ mod test {
         );
         let sec_key = result1.sig_key;
         let sec_nonce = result1.sig_nonce;
-        let fin_slate = core.fin_tx(result2.slate, &sec_key, &sec_nonce).unwrap();
+        let fin_slate = core
+            .fin_tx(result2.slate, &sec_key, &sec_nonce, true)
+            .unwrap();
+        let ser = serde_json::to_string(&fin_slate).unwrap();
+        println!("final slate: {}", ser);
+    }
+
+    #[test]
+    fn test_full_flow_dspend() {
+        set_local_chain_type(ChainTypes::AutomatedTesting);
+        let fund_value = grin_to_nanogrin(2);
+        let mut core = GrinCore::new();
+
+        // Create some valid input coin
+        let input_val = fund_value * 2;
+        let bf_a = create_secret_key(&mut core.rng, &core.secp);
+        let bf_b = create_secret_key(&mut core.rng, &core.secp);
+        let commit_a = core.secp.commit(input_val, bf_a.clone()).unwrap();
+        let commit_b = core.secp.commit(0, bf_b.clone()).unwrap();
+        let commit = core
+            .secp
+            .commit_sum(vec![commit_a, commit_b], vec![])
+            .unwrap();
+        let coin_a = MWCoin {
+            commitment: serialize_commitment(&commit),
+            blinding_factor: serialize_secret_key(&bf_a),
+            value: input_val,
+        };
+        let coin_b = MWCoin {
+            commitment: serialize_commitment(&commit),
+            blinding_factor: serialize_secret_key(&bf_b),
+            value: input_val,
+        };
+        let result1 = core.spend_coins(vec![coin_a], fund_value, 0, 2, 3).unwrap();
+        let result2 = core
+            .d_spend_coins(vec![coin_b], result1.slate, fund_value, 0)
+            .unwrap();
+        let result3 = core.recv_coins(result2.slate, fund_value).unwrap();
+        let result4 = core
+            .fin_tx(result3.slate, &result1.sig_key, &result1.sig_nonce, false)
+            .unwrap();
+        let fin_slate = core
+            .fin_tx(result4, &result2.sig_key, &result2.sig_nonce, true)
+            .unwrap();
+        let ser = serde_json::to_string(&fin_slate).unwrap();
+        println!("final slate: {}", ser);
+    }
+
+    #[test]
+    fn test_full_tx_flow_drecv() {
+        set_local_chain_type(ChainTypes::AutomatedTesting);
+        let fund_value = grin_to_nanogrin(2);
+        let mut core = GrinCore::new();
+
+        // Create some valid input coin
+        let inp_val = fund_value * 2;
+        let inp_bf = create_secret_key(&mut core.rng, &core.secp);
+        let commitment = core.secp.commit(inp_val, inp_bf.clone()).unwrap();
+        let coin = MWCoin {
+            commitment: serialize_commitment(&commitment),
+            blinding_factor: serialize_secret_key(&inp_bf),
+            value: inp_val,
+        };
+
+        let result1 = core.spend_coins(vec![coin], fund_value, 0, 2, 3)
+            .unwrap();
+        let result2 = core.drecv_coins_r1(result1.slate, fund_value)
+            .unwrap();
+        let result3 = core.drecv_coins_r2(result2.slate, fund_value, result2.prf_ctx)
+            .unwrap();
+        let recv_coins_res = result3.0;
+        let prf_ctx = result3.1;
+        let result4 = core.drecv_coins_r3(
+            recv_coins_res.slate, 
+            prf_ctx, 
+            result2.out_key_blind, 
+            result2.prf_nonce, 
+            result2.sig_nonce)
+            .unwrap();
+        let fin_slate = core.fin_tx(result4, &result1.sig_key, &result1.sig_nonce, true)
+            .unwrap();
         let ser = serde_json::to_string(&fin_slate).unwrap();
         println!("final slate: {}", ser);
     }
