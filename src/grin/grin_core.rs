@@ -1,15 +1,18 @@
 use crate::grin::grin_routines::*;
 use crate::grin::grin_types::MWCoin;
 use crate::util::get_os_rng;
-use grin_core::core::{KernelFeatures, transaction::FeeFields};
 use grin_core::core::transaction::OutputFeatures;
+use grin_core::core::{transaction::FeeFields, KernelFeatures};
 use grin_core::core::{Input, Inputs, Output, Transaction};
 use grin_core::libtx::tx_fee;
 use grin_keychain::{BlindSum, BlindingFactor, ExtKeychain, Identifier, Keychain};
 use grin_util::secp::key::{PublicKey, SecretKey};
 use grin_util::secp::pedersen::Commitment;
 use grin_util::secp::{ContextFlag, Secp256k1};
-use grin_wallet_libwallet::{Context, Slate, slate_versions::v4::{KernelFeaturesArgsV4, SlateV4}};
+use grin_wallet_libwallet::{
+    slate_versions::v4::{KernelFeaturesArgsV4, SlateV4},
+    Context, Slate,
+};
 use rand::rngs::OsRng;
 
 pub struct GrinCore {
@@ -28,6 +31,14 @@ pub struct SpendCoinsResult {
 pub struct RecvCoinsResult {
     slate: Slate,
     output_coin: MWCoin,
+}
+
+pub struct DRecvCoinsResult {
+    slate: Slate,
+    out_key_blind: SecretKey,
+    sig_nonce: SecretKey,
+    prf_nonce: SecretKey,
+    prf_ctx: MPBPContext,
 }
 
 impl GrinCore {
@@ -59,7 +70,7 @@ impl GrinCore {
         fund_value: u64,
         timelock: u64,
         num_of_outputs: usize,
-        num_participants : u8
+        num_participants: u8,
     ) -> Result<SpendCoinsResult, String> {
         // Initial transaction slate
         let mut slate = Slate::blank(num_participants, false);
@@ -108,17 +119,15 @@ impl GrinCore {
             slate.fee_fields = fee_field;
             slate.amount = fund_value;
             slate.offset = offset.clone();
-            
+
             if timelock != 0 {
-                let kfeat = KernelFeatures::HeightLocked{
-                    fee : fee_field,
-                    lock_height: timelock
+                let kfeat = KernelFeatures::HeightLocked {
+                    fee: fee_field,
+                    lock_height: timelock,
                 };
                 slate.kernel_features = kfeat.as_u8();
-                // TODO set KernelFeaturesArgs
-
-            }
-            else {
+            // TODO set KernelFeaturesArgs
+            } else {
                 ()
             }
 
@@ -142,7 +151,7 @@ impl GrinCore {
             // Add changecoin output
             let change_value = inpval - fund_value - fee;
             // Only create an output coin if there is actually a change value
-            let mut com:Option<Commitment> = None;
+            let mut com: Option<Commitment> = None;
             if change_value > 0 {
                 println!("Creating change coin with value {}", change_value);
                 let commitment = self
@@ -188,7 +197,11 @@ impl GrinCore {
             slate
                 .fill_round_1(&self.chain, &mut ctx)
                 .expect("Failed to complete round 1 on the senders turn");
-            let change_coin_output = if com == None { None } else { Some(MWCoin::new(&com.unwrap(), &change_coin_key, change_value)) };
+            let change_coin_output = if com == None {
+                None
+            } else {
+                Some(MWCoin::new(&com.unwrap(), &change_coin_key, change_value))
+            };
 
             Ok(SpendCoinsResult {
                 slate: slate,
@@ -204,7 +217,7 @@ impl GrinCore {
     /// The second one would then have to call this one
     ///
     /// # Arguments
-    /// 
+    ///
     /// * `inputs` the input coins containing the shares of the blinding factor
     /// * `slate` Transaction slate as provided by the first sender
     /// * `fund_value` amount that should be spend and transferred to a receiver
@@ -212,9 +225,9 @@ impl GrinCore {
     pub fn d_spend_coins(
         &mut self,
         inputs: Vec<MWCoin>,
-        mut slate : Slate,
-        fund_value : u64,
-        timelock : u64
+        mut slate: Slate,
+        fund_value: u64,
+        timelock: u64,
     ) -> Result<SpendCoinsResult, String> {
         // Validate output coin rangeproofs
         let tx = slate.tx.clone().unwrap_or_else(|| Transaction::empty());
@@ -229,11 +242,11 @@ impl GrinCore {
         // Some more validations
         if slate.amount != fund_value {
             Err(String::from("Transaction amount found to be invalid"))
-        }
-        else if tx.inputs().len() != inputs.len() {
-            Err(String::from("Inputs don't match with coins given in parameters"))
-        }
-        else {
+        } else if tx.inputs().len() != inputs.len() {
+            Err(String::from(
+                "Inputs don't match with coins given in parameters",
+            ))
+        } else {
             // TODO validate optional timelock
 
             // Now we create the signing keys for this participant
@@ -267,11 +280,11 @@ impl GrinCore {
             slate
                 .fill_round_1(&self.chain, &mut ctx)
                 .expect("Failed to complete round 1 on the senders turn");
-            Ok(SpendCoinsResult{
-                slate : slate,
-                sig_key : final_key.clone(),
-                sig_nonce : sig_nonce.clone(),
-                change_coin : None
+            Ok(SpendCoinsResult {
+                slate: slate,
+                sig_key: final_key.clone(),
+                sig_nonce: sig_nonce.clone(),
+                change_coin: None,
             })
         }
     }
@@ -353,16 +366,14 @@ impl GrinCore {
             output_coin: MWCoin::new(&commitment, &out_coin_key, fund_value),
         })
     }
-    
 
-    pub fn drecv_coins(
+    pub fn drecv_coins_r1(
         &mut self,
         mut slate: Slate,
         fund_value: u64,
-        ix : u32
-    ) {
-        // Validate output coin rangeproofs
-        let mut tx = slate.tx.unwrap_or_else(|| Transaction::empty());
+    ) -> Result<DRecvCoinsResult, String> {
+        // Validate senders output coins
+        let tx = slate.tx.clone().unwrap_or_else(|| Transaction::empty());
         for out in tx.outputs() {
             let prf = out.proof;
             let com = out.identifier.commit;
@@ -371,9 +382,117 @@ impl GrinCore {
                 .expect("Failed to verify outputcoin rangeproof");
         }
 
-        // We now add our blinding factor to the output coin
+        let out_coin_blind = create_secret_key(&mut self.rng, &self.secp);
+        let shared_nonce = create_secret_key(&mut self.rng, &self.secp);
+        let prf_nonce = create_secret_key(&mut self.rng, &self.secp);
+        let sig_nonce = create_secret_key(&mut self.rng, &self.secp);
+
+        // Fill participant data
+        slate
+            .fill_round_1(
+                &self.chain,
+                &mut create_minimal_ctx(
+                    out_coin_blind.clone(),
+                    sig_nonce.clone(),
+                    fund_value,
+                    slate.fee_fields,
+                ),
+            )
+            .expect("Faile to fill_round_1 on drecv_coins r1");
+
+        // Create partial commitment for the output coin and initiate multiparty rangeproof
+        let com = self
+            .secp
+            .commit(fund_value, out_coin_blind.clone())
+            .expect("Failed to generate pedersen commitment for drecv_coins_r1");
+        let mut prf_ctx = MPBPContext::new(shared_nonce, fund_value, com);
+        prf_ctx = mp_bullet_proof_r1(prf_ctx, out_coin_blind.clone(), prf_nonce.clone())
+            .expect("Failed to run round 1A of mp bulletproofs");
+        // Add the partial signature
+        Ok(DRecvCoinsResult {
+            slate: slate,
+            out_key_blind: out_coin_blind.clone(),
+            sig_nonce: sig_nonce.clone(),
+            prf_nonce: prf_nonce.clone(),
+            prf_ctx: prf_ctx,
+        })
     }
 
+    pub fn drecv_coins_r2(
+        &mut self,
+        mut slate: Slate,
+        fund_value : u64,
+        mut prf_ctx: MPBPContext,
+    ) -> Result<(RecvCoinsResult, MPBPContext), String> {
+        // Validate senders output coins
+        let tx = slate.tx.clone().unwrap_or_else(|| Transaction::empty());
+        for out in tx.outputs() {
+            let prf = out.proof;
+            let com = out.identifier.commit;
+            self.secp
+                .verify_bullet_proof(com, prf, None)
+                .expect("Failed to verify outputcoin rangeproof");
+        }
+
+        // Add our share to the coin commitment created by receiver 1
+        let out_coin_blind = create_secret_key(&mut self.rng, &self.secp);
+        let prf_nonce = create_secret_key(&mut self.rng, &self.secp);
+        let sig_nonce = create_secret_key(&mut self.rng, &self.secp);
+
+        let com = self
+            .secp
+            .commit(0, out_coin_blind.clone())
+            .expect("Failed to generete pedersen commitment for drecv_coins_r2");
+        prf_ctx.add_commit(com);
+        prf_ctx = mp_bullet_proof_r1(prf_ctx, out_coin_blind.clone(), prf_nonce.clone())
+            .expect("Failed to run round 1B of mp bulletproofs");
+        // T1 and T2 and the commitment are now finalized we can start round 2
+        prf_ctx = mp_bullet_proof_r2(prf_ctx, out_coin_blind.clone(), prf_nonce.clone())
+            .expect("Failed to run round 2A of mp bulletproofs");
+        
+        slate.fill_round_1(
+            &self.chain, 
+            &mut create_minimal_ctx(out_coin_blind.clone(), sig_nonce.clone(), fund_value, slate.fee_fields))
+            .expect("Failed to run fill_round_1 on drecv_coins_r2");
+
+        // Now we are ready to create the first partial signature
+        slate.fill_round_2(
+            &self.chain, 
+            &out_coin_blind, 
+        &sig_nonce)
+            .expect("Failed to run fill_round_2 on drecv_coins_r2");
+
+        let coin = MWCoin::new(&com, &out_coin_blind, fund_value);
+        Ok((RecvCoinsResult{
+            slate : slate,
+            output_coin: coin
+        }, prf_ctx))
+    }
+
+    pub fn drecv_coins_r3(
+        &mut self,
+        mut slate: Slate,
+        mut prf_ctx: MPBPContext,
+        fund_value: u64,
+        out_coin_blind: SecretKey,
+        prf_nonce: SecretKey,
+    ) -> Result<Slate, String> {
+        let sig_nonce = create_secret_key(&mut self.rng, &self.secp);
+        let commit = prf_ctx.commit.clone();
+        // Finalize the bulletproof
+        let proof = mp_bullet_proof_fin(prf_ctx, out_coin_blind.clone(), prf_nonce.clone())
+            .expect("Failed to finalize mp bulletproof");
+        let output = Output::new(OutputFeatures::Plain, commit, proof);
+        let mut tx = slate.tx.unwrap();
+        let tx = tx.with_output(output);
+        slate.tx = Some(tx);
+        slate.fill_round_2(&self.chain, &out_coin_blind.clone(), &sig_nonce.clone());
+
+        slate
+            .update_kernel()
+            .expect("Failed to update kernel in drecv_coins_r3");
+        Ok(slate)
+    }
 
     /// Implementation of the finTx algorithm outlined in the thesis
     /// Returns the final transaction slate which can be broadcast to a Grin node
@@ -451,7 +570,10 @@ mod test {
         let ser = serde_json::to_string(&result.slate).unwrap();
         let tx = result.slate.tx.unwrap();
         let fee: u64 = result.slate.fee_fields.fee(0);
-        assert_eq!(input_val - fund_value - fee, result.change_coin.unwrap().value);
+        assert_eq!(
+            input_val - fund_value - fee,
+            result.change_coin.unwrap().value
+        );
         assert_eq!(fund_value, result.slate.amount);
         assert_eq!(false, tx.inputs().is_empty());
         let deser = Slate::deserialize_upgrade(&ser).unwrap();
@@ -519,7 +641,8 @@ mod test {
             blinding_factor: serialize_secret_key(&input_bf),
             value: input_val,
         };
-        core.spend_coins(vec![coin, coin2], fund_value, 0, 2, 2).unwrap();
+        core.spend_coins(vec![coin, coin2], fund_value, 0, 2, 2)
+            .unwrap();
     }
 
     #[test]
@@ -626,7 +749,7 @@ mod test {
         };
 
         set_local_chain_type(ChainTypes::AutomatedTesting);
-        let result1 = core.spend_coins(vec![coin], fund_value, 0, 2,2).unwrap();
+        let result1 = core.spend_coins(vec![coin], fund_value, 0, 2, 2).unwrap();
         println!(
             "sec_key: {} nonce: {}",
             serialize_secret_key(&result1.sig_key),
@@ -652,19 +775,29 @@ mod test {
     fn read_from_slatepack() {
         set_local_chain_type(ChainTypes::AutomatedTesting);
         let mut core = GrinCore::new();
-        let slatepack_str = String::from(r#"BEGINSLATEPACK. GQmH7GaNdFzjNDP VgqoBqELw9Kmsxi DjhjrGAbsnYWpY3 FM5zzhBoZiMZyrY ZG4znjJK6aMKWL4 3SNNbGZmXcLFU5o mprDxKfc9WePH5n uiM2uCevD2KxfPh Nu4gU2f5LjdmWF8 yvvaUpbfqTMbnm5 RG89Chwh7jrGP4o zXDn2ST1QN3fWkB NPuhUVjrk9Xbndi qJXUQFXicc5vWsd C6jusT7rXyDhrYN 2vPaZGGWVewdRPg egKi6oDthxb5uvw pGWW4vq6amxzjTv jhtqU5DXqjHm2VK TswZQsTWPw8c64G rz21D4s. ENDSLATEPACK."#);
-        let packer = Slatepacker::new(SlatepackerArgs{sender: None, recipients: vec![], dec_key: None});
-        let slatepack = packer.deser_slatepack(&slatepack_str.into_bytes(), false)
+        let slatepack_str = String::from(
+            r#"BEGINSLATEPACK. GQmH7GaNdFzjNDP VgqoBqELw9Kmsxi DjhjrGAbsnYWpY3 FM5zzhBoZiMZyrY ZG4znjJK6aMKWL4 3SNNbGZmXcLFU5o mprDxKfc9WePH5n uiM2uCevD2KxfPh Nu4gU2f5LjdmWF8 yvvaUpbfqTMbnm5 RG89Chwh7jrGP4o zXDn2ST1QN3fWkB NPuhUVjrk9Xbndi qJXUQFXicc5vWsd C6jusT7rXyDhrYN 2vPaZGGWVewdRPg egKi6oDthxb5uvw pGWW4vq6amxzjTv jhtqU5DXqjHm2VK TswZQsTWPw8c64G rz21D4s. ENDSLATEPACK."#,
+        );
+        let packer = Slatepacker::new(SlatepackerArgs {
+            sender: None,
+            recipients: vec![],
+            dec_key: None,
+        });
+        let slatepack = packer
+            .deser_slatepack(&slatepack_str.into_bytes(), false)
             .unwrap();
-        let slate = packer.get_slate(&slatepack)
-            .unwrap();
+        let slate = packer.get_slate(&slatepack).unwrap();
         let slate_str = serde_json::to_string(&slate).unwrap();
         println!("decoded slate: {}", slate_str);
-        let result = core.recv_coins(slate, grin_to_nanogrin(2))
-            .unwrap();
+        let result = core.recv_coins(slate, grin_to_nanogrin(2)).unwrap();
         let ser = serde_json::to_string(&result.slate).unwrap();
         println!("final slate: {}", ser);
-        println!("commitment: {}, blinding factor: {}, value: {}", &result.output_coin.commitment, &result.output_coin.blinding_factor, result.output_coin.value);
+        println!(
+            "commitment: {}, blinding factor: {}, value: {}",
+            &result.output_coin.commitment,
+            &result.output_coin.blinding_factor,
+            result.output_coin.value
+        );
         let upt_slatepack = packer.create_slatepack(&result.slate).unwrap();
         let ser_pack = serde_json::to_string(&upt_slatepack).unwrap();
         println!("slatepack: {}", &ser_pack);
