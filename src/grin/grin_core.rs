@@ -22,29 +22,29 @@ pub struct GrinCore {
 }
 
 pub struct SpendCoinsResult {
-    slate: Slate,
-    sig_key: SecretKey,
-    sig_nonce: SecretKey,
-    change_coin: Option<MWCoin>,
+    pub slate: Slate,
+    pub sig_key: SecretKey,
+    pub sig_nonce: SecretKey,
+    pub change_coin: Option<MWCoin>,
 }
 
 pub struct RecvCoinsResult {
-    slate: Slate,
-    output_coin: MWCoin,
+    pub slate: Slate,
+    pub output_coin: MWCoin,
 }
 
 pub struct AptRecCoinsResult {
-    slate: Slate,
-    output_coin: MWCoin,
-    prt_sig: (Signature, Signature)
+    pub slate: Slate,
+    pub output_coin: MWCoin,
+    pub prt_sig: (Signature, Signature)
 }
 
 pub struct DRecvCoinsResult {
-    slate: Slate,
-    out_key_blind: SecretKey,
-    sig_nonce: SecretKey,
-    prf_nonce: SecretKey,
-    prf_ctx: MPBPContext,
+    pub slate: Slate,
+    pub out_key_blind: SecretKey,
+    pub sig_nonce: SecretKey,
+    pub prf_nonce: SecretKey,
+    pub prf_ctx: MPBPContext,
 }
 
 impl GrinCore {
@@ -752,31 +752,20 @@ impl GrinCore {
         Ok(slate)
     }
 
+    /// Extract Secret Witness value from two partial signatures 
+    /// Essentially calculates the difference in s between prt_sig and apt_sig
+    /// Return the x as SecretKey as hidden in an adapted signature
+    ///
+    /// # Arguments
+    /// * `prt_sig` the unadapted partial signature (does not hold the x)
+    /// * `apt_sig` the adapted signature (holds the x)
     pub fn ext_witness(&mut self, prt_sig : Signature, apt_sig : Signature) -> SecretKey {
-        let apt_s_hex = hex::encode(&apt_sig.to_raw_data()[32..]);
-        let prt_s_hex = hex::encode(&prt_sig.to_raw_data()[32..]);
-        let whole_hex = hex::encode(&prt_sig.to_raw_data());
         let mut apt_s = SecretKey::from_slice(&self.secp, &apt_sig.to_raw_data()[32..]).unwrap();
         let mut prt_s = SecretKey::from_slice(&self.secp, &prt_sig.to_raw_data()[32..]).unwrap();
-        println!("The whole thing {}", whole_hex);
-        println!("apt: {} prt: {}", &apt_s_hex, &prt_s_hex);
-
         prt_s.neg_assign(&self.secp).unwrap();
         apt_s.add_assign(&self.secp, &prt_s).unwrap();
         apt_s
-        /*
-        let mut fin_s = SecretKey::from_slice(&self.secp, &fin_sig.to_raw_data()[31..])
-            .unwrap();
-        let mut apt_s = SecretKey::from_slice(&self.secp, &apt_sig.to_raw_data()[31..])
-            .unwrap();
-        // Calculate the diff between the two sigs to retrieve x
-        fin_s.neg_assign(&self.secp).unwrap();
-        apt_s.add_assign(&self.secp, &fin_s).unwrap();
-        apt_s
-        let apt_s = u64::from_str_radix(&apt_s_hex, 16).unwrap();
-        let prt_s = u64::from_str_radix(&prt_s_hex, 16).unwrap();
 
-        apt_s - prt_s;*/
     }
 }
 
