@@ -623,8 +623,9 @@ impl GrinCore {
         out_coin_blind: SecretKey,
         prf_nonce: SecretKey,
         sig_nonce: SecretKey,
-    ) -> Result<Slate, String> {
+    ) -> Result<RecvCoinsResult, String> {
         let commit = prf_ctx.commit.clone();
+        let amount = prf_ctx.amount.clone();
         // Run round 2 of the the mp bulletproof protocol
         prf_ctx = mp_bullet_proof_r2(prf_ctx, out_coin_blind.clone(), prf_nonce.clone())
             .expect("failed to run round 2 of mp_bullet_proof");
@@ -642,7 +643,11 @@ impl GrinCore {
         slate
             .update_kernel()
             .expect("Failed to update kernel in drecv_coins_r3");
-        Ok(slate)
+        let out_coin = MWCoin::new(&commit, &out_coin_blind, amount);
+        Ok(RecvCoinsResult{
+            slate : slate,
+            output_coin : out_coin
+        })
     }
 
     /// Implementation of the finTx algorithm outlined in the thesis
@@ -1077,7 +1082,7 @@ mod test {
             result2.prf_nonce, 
             result2.sig_nonce)
             .unwrap();
-        let fin_slate = core.fin_tx(result4, &result1.sig_key, &result1.sig_nonce, true, None, None)
+        let fin_slate = core.fin_tx(result4.slate, &result1.sig_key, &result1.sig_nonce, true, None, None)
             .unwrap();
         let ser = serde_json::to_string(&fin_slate).unwrap();
         println!("final slate: {}", ser);
