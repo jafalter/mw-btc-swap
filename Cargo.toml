@@ -20,7 +20,12 @@ tokio = { version = "0.2", features = ["full"] }
 #grin_core = { path = "./grin/core" }
 #grin_util = { path = "./grin/util" }
 #grin_keychain = { path = "./grin/keychain" }
-grin_core = { git = "https://github.com/mimblewimble/grin", tag = "v5.0.0-rc.1" }
-grin_wallet_libwallet = { path = "grin-wallet/libwallet"}
-grin_util = { git = "https://github.com/mimblewimble/grin", tag = "v5.0.0-rc.1" }
-grin_keychain = { git = "https://github.com/mimblewimble/grin", tag = "v5.0.0-rc.1" }
+#grin_wallet_libwallet = { path = "grin-wallet/libwallet"}
+#grin_core = { git = "https://github.com/mimblewimble/grin", tag = "v5.0.1" }
+#grin_util = { git = "https://github.com/mimblewimble/grin", tag = "v5.0.1" }
+#grin_wallet_libwallet = { git = "https://github.com/jafalter/grin-wallet", branch = "v5.0.1-branch" }
+#grin_keychain = { git = "https://github.com/mimblewimble/grin", tag = "v5.0.1" }
+grin_core = { version = "5.0.1" }
+grin_util = { version = "5.0.1" }
+grin_wallet_libwallet = { version = "5.0.1" }
+grin_keychain = { version = "5.0.1" }
