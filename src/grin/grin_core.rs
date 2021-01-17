@@ -16,9 +16,9 @@ use grin_wallet_libwallet::{
 use rand::rngs::OsRng;
 
 pub struct GrinCore {
-    rng: OsRng,
-    secp: Secp256k1,
-    chain: ExtKeychain,
+    pub rng: OsRng,
+    pub secp: Secp256k1,
+    pub chain: ExtKeychain,
 }
 
 pub struct SpendCoinsResult {
@@ -1144,7 +1144,7 @@ mod test {
         set_local_chain_type(ChainTypes::AutomatedTesting);
         let mut core = GrinCore::new();
         let slatepack_str = String::from(
-            r#"BEGINSLATEPACK. GQmH7GaNdFzjNDP VgqoBqELw9Kmsxi DjhjrGAbsnYWpY3 FM5zzhBoZiMZyrY ZG4znjJK6aMKWL4 3SNNbGZmXcLFU5o mprDxKfc9WePH5n uiM2uCevD2KxfPh Nu4gU2f5LjdmWF8 yvvaUpbfqTMbnm5 RG89Chwh7jrGP4o zXDn2ST1QN3fWkB NPuhUVjrk9Xbndi qJXUQFXicc5vWsd C6jusT7rXyDhrYN 2vPaZGGWVewdRPg egKi6oDthxb5uvw pGWW4vq6amxzjTv jhtqU5DXqjHm2VK TswZQsTWPw8c64G rz21D4s. ENDSLATEPACK."#,
+            r#"BEGINSLATEPACK. 2ggbW8PZi5GV1Y5 KTMXbjZUbLTxNDx c2uEp9Jg8F9Qq5i z34zazcL2tA6tHb bqQ3PdSnpEoGEBu fYdLDupQt7psw7q CvC4z7a2c9hXHNa dK4v3YHjKJu6csy LfUYQyQZR5NrtN6 XXDeeEnJyG4xxmZ J2uKaWM4wPBgFsD 6kNN7LbZWKASmMu mLDEJuBhUk1M3Jg 8PQnLvc1UMppzeE jecBThZMWjckUZM yAPzyUqxJSjfqcA BDNfPaFLHbrjCW8 uakuAubanRcXVon tSXn54ikJHd4FdH sZWbnzxu7j2ddG8 J5txMJas. ENDSLATEPACK."#,
         );
         let packer = Slatepacker::new(SlatepackerArgs {
             sender: None,

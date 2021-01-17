@@ -1,9 +1,10 @@
 use std::net::TcpStream;
 
 use crate::net::tcp::{read_from_stream, write_to_stream};
+use grin_util::secp::{PublicKey, SecretKey};
 use grin_wallet_libwallet::Slate;
 
-use super::{grin_core::GrinCore, grin_routines::MPBPContext, grin_types::MWCoin};
+use super::{grin_core::GrinCore, grin_routines::{MPBPContext, sig_extract_s}, grin_types::MWCoin};
 
 pub struct GrinTx {
     core: GrinCore,
@@ -18,6 +19,12 @@ pub struct DSharedOutMwTxResult {
     tx: Slate,
     change_coin: Option<MWCoin>,
     shared_coin: MWCoin,
+}
+
+pub struct ContractMwResult {
+    tx : Slate,
+    coin : MWCoin,
+    x : SecretKey
 }
 
 impl GrinTx {
@@ -224,7 +231,7 @@ impl GrinTx {
         // Send initial slate to Bob
         let ptx = serde_json::to_string(&dspend_coins_result.slate).unwrap();
         write_to_stream(stream, &ptx);
-        // Received updated pre-transaction from Bob
+        // Receive updated pre-transaction from Bob
         let bob_msg = read_from_stream(stream);
         let ptx2 = Slate::deserialize_upgrade(&bob_msg).unwrap();
         // Second round of finalize tx
@@ -295,4 +302,120 @@ impl GrinTx {
             coin : recv_result.output_coin
         })
     }
+
+    pub fn dcontract_mw_tx_alice(
+        &mut self,
+        inp: MWCoin,
+        fund_value : u64,
+        timelock : u64,
+        pub_x : PublicKey,
+        stream : TcpStream
+    ) -> Result<ContractMwResult, String> {
+        let dspend_coins_result = self
+            .core
+            .spend_coins(vec![inp], fund_value, timelock, 2, 3)?;
+        let ptx = serde_json::to_string(&dspend_coins_result.slate)
+            .unwrap();
+        // Send initial slate to Bob
+        write_to_stream(stream, &ptx);
+        // Receive updated pre-transaction from Bob
+        let bob_msg = read_from_stream(stream);
+        let ptx2 = Slate::deserialize_upgrade(&bob_msg)
+            .unwrap();
+        let apt_sig_bob = ptx2
+            .participant_data
+            .get(1)
+            .unwrap()
+            .part_sig
+            .unwrap();
+        // First round of finalize tx
+        let fin_tx_result = self.core.fin_tx(
+            ptx2, 
+            &dspend_coins_result.sig_key, 
+            &dspend_coins_result.sig_nonce, 
+            false, 
+            Some(pub_x), 
+            None
+        )?;
+        let sig_alice = fin_tx_result
+            .participant_data
+            .get(0)
+            .unwrap()
+            .part_sig
+            .unwrap();
+        // Send ptx3 to Bob which should complete
+        let ptx3 = serde_json::to_string(&fin_tx_result)
+            .unwrap();
+        write_to_stream(stream, &ptx3);
+        // Receive final tx from Bob
+        let bob_msg2 = read_from_stream(stream);
+        let tx = Slate::deserialize_upgrade(&bob_msg2)
+            .unwrap();
+        let fin_sig = tx.tx.unwrap().kernels()[0].excess_sig;
+
+        // Finally we extract x
+        let s_fin = sig_extract_s(&fin_sig, &self.core.secp);
+        let s_bob_apt = sig_extract_s(&apt_sig_bob, &self.core.secp);
+        let s_alice = sig_extract_s(&sig_alice, &self.core.secp);
+        let s_alice_neg = s_alice.clone();
+        s_alice_neg.neg_assign(&self.core.secp).unwrap();
+        let s_bob = s_fin.clone();
+        s_bob.add_assign(
+            &self.core.secp, 
+            &s_alice_neg
+        ).unwrap();
+        let s_bob_neg = s_bob.clone();
+        s_bob_neg.neg_assign(&self.core.secp).unwrap();
+        let x = s_bob_apt.clone();
+        x.add_assign(
+            &self.core.secp,
+            &s_bob_neg 
+        ).unwrap();
+
+        Ok(ContractMwResult{
+            tx : tx,
+            coin : dspend_coins_result.change_coin.unwrap(),
+            x : x
+        });
+    }
+
+    pub fn dcontract_mw_tx_bob(
+        &mut self,
+        inp: MWCoin,
+        fund_value : u64,
+        timelock : u64,
+        x : SecretKey,
+        stream : TcpStream
+    ) -> Result<ContractMwResult, String> {
+        // Receive initial pre-transaction from Alice
+        let alice_msg = read_from_stream(stream);
+        let ptx = Slate::deserialize_upgrade(&alice_msg).unwrap();
+        // Build updated pre-transaction
+        let dspend_coins_result = self.core.d_spend_coins(vec![inp], ptx, fund_value, timelock)?;
+        let rec_coins_result = self.core.apt_recv_coins(dspend_coins_result.slate, fund_value, x)?;
+        // Send to Alice the update pre-transaction
+        let ptx2 = serde_json::to_string(&rec_coins_result.slate).unwrap();
+        write_to_stream(stream, &ptx2);
+        // Receive the partially finalized tx from alice
+        let alice_msg2 = read_from_stream(stream);
+        let ptx3 = Slate::deserialize_upgrade(&ailce_msg2).unwrap();
+        // Finalize the transaction
+        let fin_tx_result = self.core.fin_tx(
+            ptx3, 
+            &dspend_coins_result.sig_key, 
+            &dspend_coins_result.sig_nonce, 
+            true, 
+            None,
+            rec_coins_result.prt_sig 
+        )?;
+        // send final tx to alice
+        let tx = serde_json::to_string(&fin_tx_result).unwrap();
+        write_to_stream(stream, &tx);
+        Ok(ContractMwResult{
+            tx : fin_tx_result,
+            coin : rec_coins_result.output_coin,
+            x : x
+        })
+    }
+
 }

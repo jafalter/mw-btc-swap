@@ -1,3 +1,4 @@
+use bitcoin::secp256k1::Signature;
 use grin_core::core::FeeFields;
 use grin_keychain::Identifier;
 use grin_util::secp::pedersen::Commitment;
@@ -7,7 +8,7 @@ use grin_util::secp::{
     pedersen::{ProofMessage, RangeProof},
     ContextFlag, PublicKey, Secp256k1,
 };
-use grin_wallet_libwallet::Context;
+use grin_wallet_libwallet::{Context, Slate};
 use rand::rngs::OsRng;
 use serde::{Serialize, Deserialize};
 
@@ -117,6 +118,17 @@ impl MPBPContext {
 /// * `secp` Elliptic curve functionalities
 pub fn create_secret_key(rng: &mut OsRng, secp: &Secp256k1) -> SecretKey {
     SecretKey::new(secp, rng)
+}
+
+/// Extract the s value from a schnorr signature
+/// Returns the s value of the signature as a SecretKey
+///
+/// # Arguments
+/// * `sig` the signature from which to extract s
+/// * `secp` elliptic cureve functionalities
+pub fn sig_extract_s(sig : &Signature, secp: &Secp256k1) -> SecretKey {
+    SecretKey::from_slice(secp, &sig.to_raw_data()[32..])
+        .unwrap()
 }
 
 /// Serialze a secret key to a hex encoded string
