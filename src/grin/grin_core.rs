@@ -6,8 +6,12 @@ use grin_core::core::{transaction::FeeFields, KernelFeatures};
 use grin_core::core::{Input, Inputs, Output, Transaction};
 use grin_core::libtx::tx_fee;
 use grin_keychain::{BlindSum, BlindingFactor, ExtKeychain, Identifier, Keychain};
-use grin_util::secp::{Signature, aggsig, key::{PublicKey, SecretKey}};
 use grin_util::secp::pedersen::Commitment;
+use grin_util::secp::{
+    aggsig,
+    key::{PublicKey, SecretKey},
+    Signature,
+};
 use grin_util::secp::{ContextFlag, Secp256k1};
 use grin_wallet_libwallet::{
     slate_versions::v4::{KernelFeaturesArgsV4, SlateV4},
@@ -36,7 +40,7 @@ pub struct RecvCoinsResult {
 pub struct AptRecCoinsResult {
     pub slate: Slate,
     pub output_coin: MWCoin,
-    pub prt_sig: (Signature, Signature)
+    pub prt_sig: (Signature, Signature),
 }
 
 pub struct DRecvCoinsResult {
@@ -79,7 +83,14 @@ impl GrinCore {
         num_participants: u8,
     ) -> Result<SpendCoinsResult, String> {
         // Initial transaction slate
-        let mut slate = Slate::blank(num_participants, false);
+        let lock_height_param = if timelock != 0 { Some(timelock) } else { None };
+        let kernel_feat_param = if lock_height_param.is_some() { 2 } else { 0 };
+        let mut slate = Slate::blank_with_kernel_features(
+            num_participants,
+            false,
+            kernel_feat_param,
+            lock_height_param,
+        );
         // Calculcate basefee based on number of inputs and expected outputs
         let fee = tx_fee(inputs.len(), num_of_outputs, 1);
         println!("Fee is {}", fee);
@@ -125,17 +136,6 @@ impl GrinCore {
             slate.fee_fields = fee_field;
             slate.amount = fund_value;
             slate.offset = offset.clone();
-
-            if timelock != 0 {
-                let kfeat = KernelFeatures::HeightLocked {
-                    fee: fee_field,
-                    lock_height: timelock,
-                };
-                slate.kernel_features = kfeat.as_u8();
-            // TODO set KernelFeaturesArgs
-            } else {
-                ()
-            }
 
             // Add the input coins
             let mut inp_vector: Vec<Input> = vec![];
@@ -253,45 +253,55 @@ impl GrinCore {
                 "Inputs don't match with coins given in parameters",
             ))
         } else {
-            // TODO validate optional timelock
-
-            // Now we create the signing keys for this participant
-            let mut blind_sum = BlindSum::new();
-            for coin in inputs {
-                let inp_key = deserialize_secret_key(&coin.blinding_factor, &self.secp);
-                let inp_bf = BlindingFactor::from_secret_key(inp_key.clone());
-                blind_sum = blind_sum.sub_blinding_factor(inp_bf);
+            // Validate Kernel features (transaction lock height)
+            let valid_features;
+            if timelock != 0 {
+                valid_features = slate.kernel_features == 2
+                    && slate.kernel_features_args.clone().unwrap().lock_height == timelock;
+            } else {
+                valid_features = slate.kernel_features == 0;
             }
-            let final_key = self
-                .chain
-                .blind_sum(&blind_sum)
-                .expect("Failed to calculate final blinding factor sum")
-                .secret_key(&self.secp)
-                .unwrap();
-            let sig_nonce = create_secret_key(&mut self.rng, &self.secp);
-            let mut ctx: Context = Context {
-                parent_key_id: Identifier::zero(),
-                sec_key: final_key.clone(),
-                sec_nonce: sig_nonce.clone(),
-                initial_sec_key: final_key.clone(),
-                initial_sec_nonce: sig_nonce.clone(),
-                output_ids: vec![],
-                input_ids: vec![],
-                amount: fund_value.clone(),
-                fee: Some(slate.fee_fields),
-                payment_proof_derivation_index: None,
-                late_lock_args: None,
-                calculated_excess: None,
-            };
-            slate
-                .fill_round_1(&self.chain, &mut ctx)
-                .expect("Failed to complete round 1 on the senders turn");
-            Ok(SpendCoinsResult {
-                slate: slate,
-                sig_key: final_key.clone(),
-                sig_nonce: sig_nonce.clone(),
-                change_coin: None,
-            })
+            if !valid_features {
+                Err(String::from("Transaction timelock is not setup correctly!"))
+            } else {
+                // Now we create the signing keys for this participant
+                let mut blind_sum = BlindSum::new();
+                for coin in inputs {
+                    let inp_key = deserialize_secret_key(&coin.blinding_factor, &self.secp);
+                    let inp_bf = BlindingFactor::from_secret_key(inp_key.clone());
+                    blind_sum = blind_sum.sub_blinding_factor(inp_bf);
+                }
+                let final_key = self
+                    .chain
+                    .blind_sum(&blind_sum)
+                    .expect("Failed to calculate final blinding factor sum")
+                    .secret_key(&self.secp)
+                    .unwrap();
+                let sig_nonce = create_secret_key(&mut self.rng, &self.secp);
+                let mut ctx: Context = Context {
+                    parent_key_id: Identifier::zero(),
+                    sec_key: final_key.clone(),
+                    sec_nonce: sig_nonce.clone(),
+                    initial_sec_key: final_key.clone(),
+                    initial_sec_nonce: sig_nonce.clone(),
+                    output_ids: vec![],
+                    input_ids: vec![],
+                    amount: fund_value.clone(),
+                    fee: Some(slate.fee_fields),
+                    payment_proof_derivation_index: None,
+                    late_lock_args: None,
+                    calculated_excess: None,
+                };
+                slate
+                    .fill_round_1(&self.chain, &mut ctx)
+                    .expect("Failed to complete round 1 on the senders turn");
+                Ok(SpendCoinsResult {
+                    slate: slate,
+                    sig_key: final_key.clone(),
+                    sig_nonce: sig_nonce.clone(),
+                    change_coin: None,
+                })
+            }
         }
     }
 
@@ -344,7 +354,12 @@ impl GrinCore {
         slate
             .update_kernel()
             .expect("Failed to udpate kernel in recv_coins");
-        let mut ctx = create_minimal_ctx(out_coin_key.clone(), sig_nonce.clone(), fund_value, slate.fee_fields);
+        let mut ctx = create_minimal_ctx(
+            out_coin_key.clone(),
+            sig_nonce.clone(),
+            fund_value,
+            slate.fee_fields,
+        );
         slate
             .fill_round_1(&self.chain, &mut ctx)
             .expect("Failed to complete round 1 on receivers turn");
@@ -375,7 +390,7 @@ impl GrinCore {
         &mut self,
         mut slate: Slate,
         fund_value: u64,
-        x: SecretKey
+        x: SecretKey,
     ) -> Result<AptRecCoinsResult, String> {
         // Validate output coin rangeproofs
         let mut tx = slate.tx.unwrap_or_else(|| Transaction::empty());
@@ -413,56 +428,59 @@ impl GrinCore {
         slate
             .update_kernel()
             .expect("Failed to udpate kernel in recv_coins");
-        let mut ctx = create_minimal_ctx(out_coin_key.clone(), sig_nonce.clone(), fund_value, slate.fee_fields);
+        let mut ctx = create_minimal_ctx(
+            out_coin_key.clone(),
+            sig_nonce.clone(),
+            fund_value,
+            slate.fee_fields,
+        );
         slate
             .fill_round_1(&self.chain, &mut ctx)
             .expect("Failed to complete round 1 on receivers turn");
 
-        let pub_nonce_sum = slate
-            .pub_nonce_sum(&self.secp)
-            .unwrap();
-        let pub_blind_sum = slate
-            .pub_blind_sum(&self.secp)
-            .unwrap();
+        let pub_nonce_sum = slate.pub_nonce_sum(&self.secp).unwrap();
+        let pub_blind_sum = slate.pub_blind_sum(&self.secp).unwrap();
         let msg = slate.msg_to_sign().unwrap();
         // Signs the transaction
         let sig = aggsig::sign_single(
-            &self.secp, 
-            &msg, 
-            &out_coin_key, 
-            Some(&sig_nonce), 
-            None, 
-            Some(&pub_nonce_sum), 
-            Some(&pub_blind_sum), 
-            Some(&pub_nonce_sum)
-        ).expect("Failed to calculate adapted signature in apt_recv");
+            &self.secp,
+            &msg,
+            &out_coin_key,
+            Some(&sig_nonce),
+            None,
+            Some(&pub_nonce_sum),
+            Some(&pub_blind_sum),
+            Some(&pub_nonce_sum),
+        )
+        .expect("Failed to calculate adapted signature in apt_recv");
         let apt_sig = aggsig::sign_single(
-            &self.secp, 
-            &msg, 
-            &out_coin_key, 
-            Some(&sig_nonce), 
-            Some(&x), 
-            Some(&pub_nonce_sum), 
-            Some(&pub_blind_sum), 
-            Some(&pub_nonce_sum)
-        ).expect("Failed to calculate unadapted signature in apt_recv");
+            &self.secp,
+            &msg,
+            &out_coin_key,
+            Some(&sig_nonce),
+            Some(&x),
+            Some(&pub_nonce_sum),
+            Some(&pub_blind_sum),
+            Some(&pub_nonce_sum),
+        )
+        .expect("Failed to calculate unadapted signature in apt_recv");
 
         // Add the adapted signature
         let pub_excess = PublicKey::from_secret_key(&self.secp, &out_coin_key).unwrap();
-		let pub_nonce = PublicKey::from_secret_key(&self.secp, &sig_nonce).unwrap();
-		for i in 0..slate.num_participants() as usize {
-			// find my entry
-			if slate.participant_data[i].public_blind_excess == pub_excess
-				&& slate.participant_data[i].public_nonce == pub_nonce
-			{
-				slate.participant_data[i].part_sig = Some(apt_sig);
-				break;
-			}
+        let pub_nonce = PublicKey::from_secret_key(&self.secp, &sig_nonce).unwrap();
+        for i in 0..slate.num_participants() as usize {
+            // find my entry
+            if slate.participant_data[i].public_blind_excess == pub_excess
+                && slate.participant_data[i].public_nonce == pub_nonce
+            {
+                slate.participant_data[i].part_sig = Some(apt_sig);
+                break;
+            }
         }
-        Ok(AptRecCoinsResult{
+        Ok(AptRecCoinsResult {
             slate: slate,
             output_coin: MWCoin::new(&commitment, &out_coin_key, fund_value),
-            prt_sig : (apt_sig, sig)
+            prt_sig: (apt_sig, sig),
         })
     }
 
@@ -644,9 +662,9 @@ impl GrinCore {
             .update_kernel()
             .expect("Failed to update kernel in drecv_coins_r3");
         let out_coin = MWCoin::new(&commit, &out_coin_blind, amount);
-        Ok(RecvCoinsResult{
-            slate : slate,
-            output_coin : out_coin
+        Ok(RecvCoinsResult {
+            slate: slate,
+            output_coin: out_coin,
         })
     }
 
@@ -660,15 +678,15 @@ impl GrinCore {
     /// * `sec_nonce` the senders signing nonce
     /// * `finalize` if we should finalize the transaction (set it to false if there are further signatures coming i.e. in the dSpendCoins case)
     /// * `pub_x` if we are in dAptFinTx and verify the partial signature with the pub_x as extra data
-    /// * `pt_sig` if we are in dAptFinTx and want to replace the receivers adapted signature with the unadapted one 
+    /// * `pt_sig` if we are in dAptFinTx and want to replace the receivers adapted signature with the unadapted one
     pub fn fin_tx(
         &mut self,
         mut slate: Slate,
         sec_key: &SecretKey,
         sec_nonce: &SecretKey,
         finalize: bool,
-        pub_x : Option<PublicKey>,
-        replace_sig : Option<(Signature, Signature)>
+        pub_x: Option<PublicKey>,
+        replace_sig: Option<(Signature, Signature)>,
     ) -> Result<Slate, String> {
         // First we verify output coin rangeproofs
         let tx = slate.tx.clone().unwrap();
@@ -680,26 +698,21 @@ impl GrinCore {
                 .expect("Failed to verify outputcoin rangeproof");
         }
         if pub_x.is_some() {
-            let pub_nonce_sum = slate
-                .pub_nonce_sum(&self.secp)
-                .unwrap();
-            let pub_blind_sum = slate
-                .pub_blind_sum(&self.secp)
-                .unwrap();
-            let msg = slate.msg_to_sign()
-                .unwrap();
+            let pub_nonce_sum = slate.pub_nonce_sum(&self.secp).unwrap();
+            let pub_blind_sum = slate.pub_blind_sum(&self.secp).unwrap();
+            let msg = slate.msg_to_sign().unwrap();
             // In the dAptFinTx we can't use fill_round_2 because we need to verify the adapted pt sig
             for p in slate.participant_data.iter() {
                 if p.is_complete() {
                     if !aggsig::verify_single(
-                        &self.secp, 
-                        &p.part_sig.unwrap(), 
-                        &msg, 
+                        &self.secp,
+                        &p.part_sig.unwrap(),
+                        &msg,
                         Some(&pub_nonce_sum),
                         &p.public_blind_excess,
                         Some(&pub_blind_sum),
                         Some(&pub_x.unwrap()),
-                        true
+                        true,
                     ) {
                         panic!("Partial adapted signature verification failed");
                     }
@@ -707,15 +720,16 @@ impl GrinCore {
             }
             // Signs the transaction
             let sig = aggsig::sign_single(
-                &self.secp, 
-                &msg, 
-                &sec_key, 
-                Some(&sec_nonce), 
-                None, 
-                Some(&pub_nonce_sum), 
-                Some(&pub_blind_sum), 
-                Some(&pub_nonce_sum)
-            ).expect("Failed to calculate signature in fin_tx");
+                &self.secp,
+                &msg,
+                &sec_key,
+                Some(&sec_nonce),
+                None,
+                Some(&pub_nonce_sum),
+                Some(&pub_blind_sum),
+                Some(&pub_nonce_sum),
+            )
+            .expect("Failed to calculate signature in fin_tx");
 
             // Add the signature
             let pub_excess = PublicKey::from_secret_key(&self.secp, &sec_key).unwrap();
@@ -729,15 +743,13 @@ impl GrinCore {
                     break;
                 }
             }
-        }
-        else {
+        } else {
             // Replace adapted signature with the unadapted one before transaction completion
             if replace_sig.is_some() {
                 let old_sig = replace_sig.unwrap().0;
                 let new_sig = replace_sig.unwrap().1;
                 for i in 0..slate.num_participants() as usize {
-                    if slate.participant_data[i].part_sig == Some(old_sig)
-                    {
+                    if slate.participant_data[i].part_sig == Some(old_sig) {
                         println!("Replacing that sig");
                         slate.participant_data[i].part_sig = Some(new_sig);
                         break;
@@ -757,20 +769,19 @@ impl GrinCore {
         Ok(slate)
     }
 
-    /// Extract Secret Witness value from two partial signatures 
+    /// Extract Secret Witness value from two partial signatures
     /// Essentially calculates the difference in s between prt_sig and apt_sig
     /// Return the x as SecretKey as hidden in an adapted signature
     ///
     /// # Arguments
     /// * `prt_sig` the unadapted partial signature (does not hold the x)
     /// * `apt_sig` the adapted signature (holds the x)
-    pub fn ext_witness(&mut self, prt_sig : Signature, apt_sig : Signature) -> SecretKey {
+    pub fn ext_witness(&mut self, prt_sig: Signature, apt_sig: Signature) -> SecretKey {
         let mut apt_s = sig_extract_s(&apt_sig, &self.secp);
         let mut prt_s = sig_extract_s(&prt_sig, &self.secp);
         prt_s.neg_assign(&self.secp).unwrap();
         apt_s.add_assign(&self.secp, &prt_s).unwrap();
         apt_s
-
     }
 }
 
@@ -784,7 +795,7 @@ mod test {
         core::{verifier_cache::LruVerifierCache, Weighting},
         global::{set_local_chain_type, ChainTypes},
     };
-    use grin_util::{RwLock, secp::PublicKey};
+    use grin_util::{secp::PublicKey, RwLock};
     use grin_wallet_libwallet::{Slate, Slatepacker, SlatepackerArgs};
 
     #[test]
@@ -1010,6 +1021,47 @@ mod test {
     }
 
     #[test]
+    fn test_full_tx_flow_timelock() {
+        let fund_value = grin_to_nanogrin(2);
+        let mut core = GrinCore::new();
+
+        // Create some valid input coin
+        let input_val = fund_value * 2;
+        let input_bf = create_secret_key(&mut core.rng, &core.secp);
+        let commitment = core.secp.commit(input_val, input_bf.clone()).unwrap();
+        let coin = MWCoin {
+            commitment: serialize_commitment(&commitment),
+            blinding_factor: serialize_secret_key(&input_bf),
+            value: input_val,
+        };
+        let timelock : u64 = 1052054;
+
+        set_local_chain_type(ChainTypes::AutomatedTesting);
+        let result1 = core.spend_coins(vec![coin], fund_value, timelock, 2, 2).unwrap();
+        println!(
+            "sec_key: {} nonce: {}",
+            serialize_secret_key(&result1.sig_key),
+            serialize_secret_key(&result1.sig_nonce)
+        );
+        println!(
+            "slate after spend coins : {}",
+            serde_json::to_string(&result1.slate).unwrap()
+        );
+        let result2 = core.recv_coins(result1.slate, fund_value).unwrap();
+        println!(
+            "slate after recv coins : {}",
+            serde_json::to_string(&result2.slate).unwrap()
+        );
+        let sec_key = result1.sig_key;
+        let sec_nonce = result1.sig_nonce;
+        let fin_slate = core
+            .fin_tx(result2.slate, &sec_key, &sec_nonce, true, None, None)
+            .unwrap();
+        let ser = serde_json::to_string(&fin_slate).unwrap();
+        println!("final slate: {}", ser);
+    }
+
+    #[test]
     fn test_full_flow_dspend() {
         set_local_chain_type(ChainTypes::AutomatedTesting);
         let fund_value = grin_to_nanogrin(2);
@@ -1041,10 +1093,23 @@ mod test {
             .unwrap();
         let result3 = core.recv_coins(result2.slate, fund_value).unwrap();
         let result4 = core
-            .fin_tx(result3.slate, &result1.sig_key, &result1.sig_nonce, false, None, None)
+            .fin_tx(
+                result3.slate,
+                &result1.sig_key,
+                &result1.sig_nonce,
+                false,
+                None,
+                None,
+            )
             .unwrap();
         let fin_slate = core
-            .fin_tx(result4, &result2.sig_key, &result2.sig_nonce, true, None, None
+            .fin_tx(
+                result4,
+                &result2.sig_key,
+                &result2.sig_nonce,
+                true,
+                None,
+                None,
             )
             .unwrap();
         let ser = serde_json::to_string(&fin_slate).unwrap();
@@ -1067,22 +1132,31 @@ mod test {
             value: inp_val,
         };
 
-        let result1 = core.spend_coins(vec![coin], fund_value, 0, 2, 3)
-            .unwrap();
-        let result2 = core.drecv_coins_r1(result1.slate, fund_value)
-            .unwrap();
-        let result3 = core.drecv_coins_r2(result2.slate, fund_value, result2.prf_ctx)
+        let result1 = core.spend_coins(vec![coin], fund_value, 0, 2, 3).unwrap();
+        let result2 = core.drecv_coins_r1(result1.slate, fund_value).unwrap();
+        let result3 = core
+            .drecv_coins_r2(result2.slate, fund_value, result2.prf_ctx)
             .unwrap();
         let recv_coins_res = result3.0;
         let prf_ctx = result3.1;
-        let result4 = core.drecv_coins_r3(
-            recv_coins_res.slate, 
-            prf_ctx, 
-            result2.out_key_blind, 
-            result2.prf_nonce, 
-            result2.sig_nonce)
+        let result4 = core
+            .drecv_coins_r3(
+                recv_coins_res.slate,
+                prf_ctx,
+                result2.out_key_blind,
+                result2.prf_nonce,
+                result2.sig_nonce,
+            )
             .unwrap();
-        let fin_slate = core.fin_tx(result4.slate, &result1.sig_key, &result1.sig_nonce, true, None, None)
+        let fin_slate = core
+            .fin_tx(
+                result4.slate,
+                &result1.sig_key,
+                &result1.sig_nonce,
+                true,
+                None,
+                None,
+            )
             .unwrap();
         let ser = serde_json::to_string(&fin_slate).unwrap();
         println!("final slate: {}", ser);
@@ -1121,14 +1195,28 @@ mod test {
         // Hide a secret x
         let x = create_secret_key(&mut core.rng, &core.secp);
         let pub_x = PublicKey::from_secret_key(&core.secp, &x).unwrap();
-        let result3 = core.
-            apt_recv_coins(result2.slate, fund_value, x.clone())
+        let result3 = core
+            .apt_recv_coins(result2.slate, fund_value, x.clone())
             .unwrap();
         let result4 = core
-            .fin_tx(result3.slate, &result1.sig_key, &result1.sig_nonce, false, Some(pub_x), None)
+            .fin_tx(
+                result3.slate,
+                &result1.sig_key,
+                &result1.sig_nonce,
+                false,
+                Some(pub_x),
+                None,
+            )
             .unwrap();
         let fin_slate = core
-            .fin_tx(result4, &result2.sig_key, &result2.sig_nonce, true, None, Some(result3.prt_sig))
+            .fin_tx(
+                result4,
+                &result2.sig_key,
+                &result2.sig_nonce,
+                true,
+                None,
+                Some(result3.prt_sig),
+            )
             .unwrap();
         let ser = serde_json::to_string(&fin_slate).unwrap();
         println!("final slate: {}", ser);
