@@ -229,7 +229,8 @@ impl GrinTx {
             .core
             .spend_coins(vec![inp], fund_value, timelock, 2, 3)?;
         // Send initial slate to Bob
-        let ptx = serde_json::to_string(&dspend_coins_result.slate).unwrap();
+        let ptx = serde_json::to_string(&dspend_coins_result.slate)
+            .unwrap();
         write_to_stream(stream, &ptx);
         // Receive updated pre-transaction from Bob
         let bob_msg = read_from_stream(stream);
@@ -303,13 +304,24 @@ impl GrinTx {
         })
     }
 
+    /// The implementation of the Alice side of the dContractMWTX protocol from the thesis
+    /// Creates a tx spending a shared input coin while revealing SecretKey x to Alice (for which she knows the PublicKey)
+    /// It outputs the transaction, change coins and the secret witness
+    ///
+    /// # Arguments
+    ///
+    /// * `inp` shared input coin
+    /// * `fund_value` the transaction value 
+    /// * `timelock` optional to height lock a transaction
+    /// * `pub_x` the public X for which Alice shall receive the x
+    /// * `stream` channel to exchange messages with Bob
     pub fn dcontract_mw_tx_alice(
         &mut self,
         inp: MWCoin,
         fund_value : u64,
         timelock : u64,
         pub_x : PublicKey,
-        stream : TcpStream
+        stream : &mut TcpStream
     ) -> Result<ContractMwResult, String> {
         let dspend_coins_result = self
             .core
@@ -324,7 +336,7 @@ impl GrinTx {
             .unwrap();
         let apt_sig_bob = ptx2
             .participant_data
-            .get(1)
+            .get(2)
             .unwrap()
             .part_sig
             .unwrap();
@@ -343,62 +355,73 @@ impl GrinTx {
             .unwrap()
             .part_sig
             .unwrap();
-        // Send ptx3 to Bob which should complete
+        // Send ptx3 to Bob which he should then complete into the final tx
         let ptx3 = serde_json::to_string(&fin_tx_result)
             .unwrap();
         write_to_stream(stream, &ptx3);
         // Receive final tx from Bob
         let bob_msg2 = read_from_stream(stream);
-        let tx = Slate::deserialize_upgrade(&bob_msg2)
+        let final_slate = Slate::deserialize_upgrade(&bob_msg2)
             .unwrap();
-        let fin_sig = tx.tx.unwrap().kernels()[0].excess_sig;
+        let fin_sig = final_slate.tx.clone().unwrap().kernels()[0].excess_sig;
 
-        // Finally we extract x
+        // Finally we extract x from the signatures
         let s_fin = sig_extract_s(&fin_sig, &self.core.secp);
         let s_bob_apt = sig_extract_s(&apt_sig_bob, &self.core.secp);
         let s_alice = sig_extract_s(&sig_alice, &self.core.secp);
-        let s_alice_neg = s_alice.clone();
+        let mut s_alice_neg = s_alice.clone();
         s_alice_neg.neg_assign(&self.core.secp).unwrap();
-        let s_bob = s_fin.clone();
+        let mut s_bob = s_fin.clone();
         s_bob.add_assign(
             &self.core.secp, 
             &s_alice_neg
         ).unwrap();
-        let s_bob_neg = s_bob.clone();
+        let mut s_bob_neg = s_bob.clone();
         s_bob_neg.neg_assign(&self.core.secp).unwrap();
-        let x = s_bob_apt.clone();
+        let mut x = s_bob_apt.clone();
         x.add_assign(
             &self.core.secp,
             &s_bob_neg 
         ).unwrap();
 
         Ok(ContractMwResult{
-            tx : tx,
+            tx : final_slate,
             coin : dspend_coins_result.change_coin.unwrap(),
             x : x
-        });
+        })
     }
 
+    /// The implementation of the Bob side of the dContractMWTX transaction spending a shared input coin
+    /// and revealing the secret key x = g^x to Alice in the process
+    /// The function returns the transaction, output coin and the secret x
+    ///
+    /// # Arguments
+    ///
+    /// * `inp` the shared input coin
+    /// * `fund_value` the transaction valu
+    /// * `timelock` optional timelock
+    /// * `x` the SecretKey for X = g^x
+    /// * `stream` channel to exchange messages with Alice 
     pub fn dcontract_mw_tx_bob(
         &mut self,
         inp: MWCoin,
         fund_value : u64,
         timelock : u64,
         x : SecretKey,
-        stream : TcpStream
+        stream : &mut TcpStream
     ) -> Result<ContractMwResult, String> {
         // Receive initial pre-transaction from Alice
         let alice_msg = read_from_stream(stream);
         let ptx = Slate::deserialize_upgrade(&alice_msg).unwrap();
         // Build updated pre-transaction
         let dspend_coins_result = self.core.d_spend_coins(vec![inp], ptx, fund_value, timelock)?;
-        let rec_coins_result = self.core.apt_recv_coins(dspend_coins_result.slate, fund_value, x)?;
+        let rec_coins_result = self.core.apt_recv_coins(dspend_coins_result.slate, fund_value, x.clone())?;
         // Send to Alice the update pre-transaction
         let ptx2 = serde_json::to_string(&rec_coins_result.slate).unwrap();
         write_to_stream(stream, &ptx2);
         // Receive the partially finalized tx from alice
         let alice_msg2 = read_from_stream(stream);
-        let ptx3 = Slate::deserialize_upgrade(&ailce_msg2).unwrap();
+        let ptx3 = Slate::deserialize_upgrade(&alice_msg2).unwrap();
         // Finalize the transaction
         let fin_tx_result = self.core.fin_tx(
             ptx3, 
@@ -406,7 +429,7 @@ impl GrinTx {
             &dspend_coins_result.sig_nonce, 
             true, 
             None,
-            rec_coins_result.prt_sig 
+            Some(rec_coins_result.prt_sig) 
         )?;
         // send final tx to alice
         let tx = serde_json::to_string(&fin_tx_result).unwrap();

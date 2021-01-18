@@ -765,8 +765,8 @@ impl GrinCore {
     /// * `prt_sig` the unadapted partial signature (does not hold the x)
     /// * `apt_sig` the adapted signature (holds the x)
     pub fn ext_witness(&mut self, prt_sig : Signature, apt_sig : Signature) -> SecretKey {
-        let mut apt_s = SecretKey::from_slice(&self.secp, &apt_sig.to_raw_data()[32..]).unwrap();
-        let mut prt_s = SecretKey::from_slice(&self.secp, &prt_sig.to_raw_data()[32..]).unwrap();
+        let mut apt_s = sig_extract_s(&apt_sig, &self.secp);
+        let mut prt_s = sig_extract_s(&prt_sig, &self.secp);
         prt_s.neg_assign(&self.secp).unwrap();
         apt_s.add_assign(&self.secp, &prt_s).unwrap();
         apt_s
@@ -1135,8 +1135,6 @@ mod test {
         // Extract x from final transaction
         let x_2 = core.ext_witness(result3.prt_sig.1, result3.prt_sig.0);
         assert_eq!(x, x_2);
-        /*println!("Extracted x: {}", serialize_secret_key(&x_2));
-        println!("x: {}", serialize_secret_key(&x));*/
     }
 
     #[test]

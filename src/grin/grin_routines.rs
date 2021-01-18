@@ -1,7 +1,6 @@
-use bitcoin::secp256k1::Signature;
 use grin_core::core::FeeFields;
 use grin_keychain::Identifier;
-use grin_util::secp::pedersen::Commitment;
+use grin_util::secp::{Signature, pedersen::Commitment};
 use grin_util::secp::SecretKey;
 use grin_util::secp::{
     key::ZERO_KEY,
