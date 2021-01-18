@@ -836,7 +836,12 @@ impl From<&Slate> for Option<Vec<CommitsV4>> {
 			Some(ref tx) => {
 				let mut ret_vec = vec![];
 				match tx.inputs() {
-					Inputs::CommitOnly(_) => panic!("commit only inputs unsupported"),
+					Inputs::CommitOnly(ref inputs) => {
+						for input in inputs {
+							let i : &Input = &Input::new(OutputFeatures::Plain, input.commitment());
+							ret_vec.push(i.into());
+						}
+					},
 					Inputs::FeaturesAndCommit(ref inputs) => {
 						for input in inputs {
 							ret_vec.push(input.into());
