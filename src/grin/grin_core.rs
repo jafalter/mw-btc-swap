@@ -1256,4 +1256,49 @@ mod test {
         let ser_pack = serde_json::to_string(&upt_slatepack).unwrap();
         println!("slatepack: {}", &ser_pack);
     }
+
+    #[test]
+    fn test_full_tx_flow_slatepack() {
+        let fund_value = 50000000;
+        let mut core = GrinCore::new();
+
+        // here is some actually valid input coin (at least was at some point)
+        let coin = MWCoin {
+            commitment: String::from("09257c975816e6ba6e9a66d1956a202b80d2cd25889a6bef2db0542d51fad6df8e"),
+            blinding_factor: String::from("afa38b309656a60024064b045ce30209c7fd5d406aa2e9216b74287f7425da41"),
+            value: 2000000000,
+        };
+
+        set_local_chain_type(ChainTypes::AutomatedTesting);
+        let result1 = core.spend_coins(vec![coin], fund_value, 0, 2, 2).unwrap();
+        let result2 = core.recv_coins(result1.slate, fund_value).unwrap();
+        let sec_key = result1.sig_key;
+        let sec_nonce = result1.sig_nonce;
+        let fin_slate = core
+            .fin_tx(result2.slate, &sec_key, &sec_nonce, true, None, None)
+            .unwrap();
+        let ser = serde_json::to_string(&fin_slate).unwrap();
+        
+        let change_coin = result1.change_coin.unwrap();
+        let out_coin = result2.output_coin;
+        println!(
+            "Sender change coin: commitment: {}, blinding factor: {}, value: {}",
+            &change_coin.commitment,
+            &change_coin.blinding_factor,
+            &change_coin.value
+        );
+        println!("Receiver output coin: commitment: {}, blinding factor: {}, value: {}",
+            &out_coin.commitment,
+            &out_coin.blinding_factor,
+            &out_coin.value
+        );
+        let packer = Slatepacker::new(SlatepackerArgs {
+            sender: None,
+            recipients: vec![],
+            dec_key: None,
+        });
+        let upt_slatepack = packer.create_slatepack(&fin_slate).unwrap();
+        let ser_pack = serde_json::to_string(&upt_slatepack).unwrap();
+        println!("slatepack: {}", &ser_pack);
+    }
 }
