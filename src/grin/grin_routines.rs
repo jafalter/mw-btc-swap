@@ -1,14 +1,16 @@
 use grin_core::core::FeeFields;
 use grin_keychain::Identifier;
-use grin_util::secp::pedersen::Commitment;
+use grin_util::secp::{Signature, pedersen::Commitment};
 use grin_util::secp::SecretKey;
 use grin_util::secp::{
     key::ZERO_KEY,
     pedersen::{ProofMessage, RangeProof},
     ContextFlag, PublicKey, Secp256k1,
 };
-use grin_wallet_libwallet::Context;
+use grin_wallet_libwallet::{Context, Slate};
 use rand::rngs::OsRng;
+use serde::{Serialize, Deserialize};
+
 
 use crate::{bitcoin::btcroutines::create_private_key, constants::NANO_GRIN, util::get_os_rng};
 
@@ -21,6 +23,16 @@ pub struct MPBPContext {
     rng: OsRng,
     secp: Secp256k1,
     pub commit: Commitment
+}
+
+#[derive(Serialize, Deserialize)]
+struct SerMPCtx {
+    t_1 : String,
+    t_2 : String,
+    amount : u64,
+    shared_nonce : String,
+    commit : String,
+    tau_x : String
 }
 
 impl MPBPContext {
@@ -36,6 +48,35 @@ impl MPBPContext {
             rng: rng,
             secp: secp,
             commit: com
+        }
+    }
+
+    pub fn to_string(&mut self) -> String {
+        let ser_obj = SerMPCtx {
+            t_1 : serialize_public_key(&self.t_1, &self.secp),
+            t_2 : serialize_public_key(&self.t_2, &self.secp),
+            amount : self.amount,
+            shared_nonce : serialize_secret_key(&self.shared_nonce),
+            commit : serialize_commitment(&self.commit),
+            tau_x : serialize_secret_key(&self.tau_x)
+        };
+        serde_json::to_string(&ser_obj).unwrap()
+    }
+
+    pub fn from_string(str : &String) -> MPBPContext {
+        let rng = get_os_rng();
+        let secp = Secp256k1::with_caps(ContextFlag::Commit);
+        let ser_obj : SerMPCtx = serde_json::from_str(str)
+            .unwrap();
+        MPBPContext {
+            t_1 : deserialize_pub_key(&ser_obj.t_1, &secp),
+            t_2 : deserialize_pub_key(&ser_obj.t_2, &secp),
+            amount : ser_obj.amount,
+            shared_nonce : deserialize_secret_key(&ser_obj.shared_nonce, &secp),
+            tau_x : deserialize_secret_key(&ser_obj.tau_x, &secp),
+            rng : rng,
+            secp : secp,
+            commit : deserialize_commitment(&ser_obj.commit)
         }
     }
 
@@ -76,6 +117,17 @@ impl MPBPContext {
 /// * `secp` Elliptic curve functionalities
 pub fn create_secret_key(rng: &mut OsRng, secp: &Secp256k1) -> SecretKey {
     SecretKey::new(secp, rng)
+}
+
+/// Extract the s value from a schnorr signature
+/// Returns the s value of the signature as a SecretKey
+///
+/// # Arguments
+/// * `sig` the signature from which to extract s
+/// * `secp` elliptic cureve functionalities
+pub fn sig_extract_s(sig : &Signature, secp: &Secp256k1) -> SecretKey {
+    SecretKey::from_slice(secp, &sig.to_raw_data()[32..])
+        .unwrap()
 }
 
 /// Serialze a secret key to a hex encoded string
@@ -126,9 +178,33 @@ pub fn create_minimal_ctx(sec_key : SecretKey, sec_nonce : SecretKey, amount: u6
 /// Serialize a pedersen commitment to a hex encoded string
 ///
 /// # Arguments
+///
 /// * `com` pedersen commitment instance
 pub fn serialize_commitment(com: &Commitment) -> String {
     hex::encode(&com)
+}
+
+/// Serialize a public key to a hex encoded compressed string
+///
+/// # Arguments
+///
+/// * `pk` the public key to serialize
+/// * `secp` Secp256k1 engine
+pub fn serialize_public_key(pk: &PublicKey, secp: &Secp256k1) -> String {
+    hex::encode(&PublicKey::serialize_vec(&pk, secp, true))
+}
+
+/// Deserialize a public key from a hex encoded string
+///
+/// # Arguments
+///
+/// * `str` the string containing the hex encoded public key
+/// * `secp` the Secp256k1 engine
+pub fn deserialize_pub_key(str: &String, secp: &Secp256k1) -> PublicKey {
+    let pk_bytes = hex::decode(str)
+        .unwrap();
+    PublicKey::from_slice(secp, &pk_bytes)
+        .unwrap()
 }
 
 /// Deserialize a pedersen commitment from a hex encoded string
@@ -262,11 +338,7 @@ mod test {
 
     use crate::util::get_os_rng;
 
-    use super::{
-        create_secret_key, deserialize_commitment, deserialize_secret_key, grin_to_nanogrin,
-        mp_bullet_proof_fin, mp_bullet_proof_r1, mp_bullet_proof_r2, serialize_commitment,
-        serialize_secret_key, MPBPContext,
-    };
+    use super::{MPBPContext, create_secret_key, deserialize_commitment, deserialize_pub_key, deserialize_secret_key, grin_to_nanogrin, mp_bullet_proof_fin, mp_bullet_proof_r1, mp_bullet_proof_r2, serialize_commitment, serialize_public_key, serialize_secret_key};
 
     #[test]
     fn test_key_serializiation() {
@@ -276,6 +348,18 @@ mod test {
         let ser = serialize_secret_key(&sk);
         let deser = deserialize_secret_key(&ser, &secp);
         assert_eq!(sk, deser);
+    }
+
+    #[test]
+    fn test_pub_key_serialization() {
+        let mut rng = get_os_rng();
+        let secp = Secp256k1::with_caps(ContextFlag::Commit);
+        let sk = create_secret_key(&mut rng, &secp);
+        let pk = PublicKey::from_secret_key(&secp, &sk)
+            .unwrap();
+        let ser = serialize_public_key(&pk, &secp);
+        let deser = deserialize_pub_key(&ser, &secp);
+        assert_eq!(pk, deser);
     }
 
     #[test]

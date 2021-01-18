@@ -2,11 +2,12 @@ use std::io::{BufReader, BufRead};
 use std::net::{TcpStream};
 use std::io::Write;
 
+
 /// Write a string messsage to a TcpStream
 pub fn write_to_stream(stream : &mut TcpStream, msg : &String) {
     println!("Writing message to stream {}", msg);
     writeln!(stream, "{}", msg)
-        .expect("Failed to write to TCPStream");
+        .expect("Failed to write msg to stream");
 }
 
 // Read a messag from the a TcpStream
