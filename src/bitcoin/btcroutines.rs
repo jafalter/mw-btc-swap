@@ -1,5 +1,5 @@
-use crate::constants::SIGHASH_ALL;
-use bitcoin::blockdata::opcodes::all::OP_ELSE;
+use crate::{constants::SIGHASH_ALL, util};
+use bitcoin::{blockdata::opcodes::all::OP_ELSE, consensus::encode::serialize_hex};
 use bitcoin::blockdata::opcodes::all::OP_CSV;
 use bitcoin::blockdata::opcodes::all::OP_CLTV;
 use bitcoin::blockdata::opcodes::all::OP_DROP;
@@ -47,13 +47,13 @@ pub fn create_private_key(rng : &mut OsRng) -> PrivateKey {
 /// # Arguments
 /// 
 /// * `recv_pk` the receivers public key
-/// * `X` the statement X = g^x for which the receivers needs to get x in order to spend this ouput
+/// * `pub_x` the statement pub_x = g^x for which the receivers needs to get x in order to spend this ouput
 /// * `refund_pk` the public key of the sender which can be spent after refund time refund_time
 /// * `inputs` the inputs spend in this transaction
 /// * `amount` the amount which should be locked
 /// * `fee` the miners fee
 /// * `refund_time` timelock for when this output should be spendable be the refunder
-pub fn create_lock_transaction(recv_pk : PublicKey, X : PublicKey, refund_pk : PublicKey, inputs : Vec<BTCInput>, amount: u64, fee: u64, refund_time : i64) -> Transaction {
+pub fn create_lock_transaction(recv_pk : PublicKey, pub_x : PublicKey, refund_pk : PublicKey, inputs : Vec<BTCInput>, amount: u64, fee: u64, refund_time : i64) -> Transaction {
     let mut txinp : Vec<TxIn> = Vec::new();
     let mut txout : Vec<TxOut> = Vec::new();
 
@@ -71,7 +71,7 @@ pub fn create_lock_transaction(recv_pk : PublicKey, X : PublicKey, refund_pk : P
             witness : witness_data
         });
     }
-    let script_pub = get_lock_pub_script(recv_pk, X, refund_pk, refund_time);
+    let script_pub = get_lock_pub_script(recv_pk, pub_x, refund_pk, refund_time);
     
     txout.push(TxOut{
         value : amount - fee,
@@ -99,10 +99,10 @@ pub fn create_lock_transaction(recv_pk : PublicKey, X : PublicKey, refund_pk : P
 /// # Arguments
 /// 
 /// * `recv_pk` the receivers public key
-/// * `X` the statement X = g^x for which the receivers needs to get x in order to spend this ouput
+/// * `pub_x` the statement pub_x = g^x for which the receivers needs to get x in order to spend this ouput
 /// * `refund_pk` the public key of the sender which can be spent after refund time refund_time
 /// * `refund_time` timelock for when this output should be spendable be the refunder
-pub fn get_lock_pub_script(recv_pk : PublicKey, X : PublicKey, refund_pk : PublicKey, refund_time : i64) -> Script {
+pub fn get_lock_pub_script(recv_pk : PublicKey, pub_x : PublicKey, refund_pk : PublicKey, refund_time : i64) -> Script {
     let builder = Builder::new()
         .push_opcode(OP_IF)
         .push_int(refund_time)
@@ -113,7 +113,7 @@ pub fn get_lock_pub_script(recv_pk : PublicKey, X : PublicKey, refund_pk : Publi
         .push_opcode(OP_ELSE)
         .push_int(2)
         .push_key(&recv_pk)
-        .push_key(&X)
+        .push_key(&pub_x)
         .push_int(2)
         .push_opcode(OP_CSV);
 
@@ -170,4 +170,33 @@ pub fn sign_transaction(tx : Transaction, script_pubkeys : Vec<Script>, skeys : 
         input : signed_inp,
         output: tx.output
     }
+}
+
+#[test]
+fn test_create_lock_tx() {
+    let mut rng = util::get_os_rng();
+    let secp = util::get_secp256k1_curve();
+
+    let inp_key_wif = String::from("cVnL2Ke9yjTivhuHLmkhtYVaNTmYXKpikNfg5GWdovSEvJcfyfCy");
+    let inp_key = PrivateKey::from_wif(&inp_key_wif)
+        .unwrap();
+    let inp_pk = PublicKey::from_private_key(&secp, &inp_key);
+    let inp_pk_hex = hex::encode(&inp_pk.to_bytes());
+
+    let bob_sk = create_private_key(&mut rng);
+    let alice_sk = create_private_key(&mut rng);
+    let x = create_private_key(&mut rng);
+    let bob_pk = PublicKey::from_private_key(&secp, &bob_sk);
+    let alice_pk = PublicKey::from_private_key(&secp, &alice_sk);
+    let pub_x = PublicKey::from_private_key(&secp, &x);
+    let inp = BTCInput::new(
+        String::from("e3eb83315cb44170184a47896079dfaee86d240540c2e740bb789d5b76eeb9a5"), 
+        0, 
+        1000000, 
+        String::from("cVnL2Ke9yjTivhuHLmkhtYVaNTmYXKpikNfg5GWdovSEvJcfyfCy"),
+        String::from(inp_pk_hex), 
+        String::from("0014ebcf32c56219bb6782aa51895451f1d818b50af5")
+    );
+    let tx = create_lock_transaction(alice_pk, pub_x, bob_pk, vec![inp], 200, 10, 9000);
+    let signed_tx = sign_transaction(tx, vec![inp.pub_script], vec![inp_key], vec![inp_pk], &secp);
 }
