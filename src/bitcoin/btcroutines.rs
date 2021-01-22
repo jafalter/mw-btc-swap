@@ -1,5 +1,5 @@
 use crate::{constants::SIGHASH_ALL, util};
-use bitcoin::{blockdata::opcodes::all::OP_ELSE, consensus::encode::serialize_hex};
+use bitcoin::{blockdata::opcodes::all::OP_ELSE, consensus::encode::serialize_hex, consensus::encode::deserialize};
 use bitcoin::blockdata::opcodes::all::OP_CSV;
 use bitcoin::blockdata::opcodes::all::OP_CLTV;
 use bitcoin::blockdata::opcodes::all::OP_DROP;
@@ -172,6 +172,66 @@ pub fn sign_transaction(tx : Transaction, script_pubkeys : Vec<Script>, skeys : 
     }
 }
 
+/// Create a Script object from a hex encoded string
+/// Returns a Script object
+///
+/// # Arguments
+///
+/// * `script_str` a hexencoded string representing a bitcoin script
+pub fn deserialize_script(script_str : &String) -> Script {
+    let bytes = hex::decode(script_str)
+        .unwrap();
+    Script::from(bytes)
+}
+
+/// Serializes a Bitcoin Script object into a string
+/// Returns a hex encoded string
+///
+/// # Arguments
+///
+/// * `script` the bitcoin script object
+pub fn serialize_script(script : &Script) -> String {
+    hex::encode(script.to_bytes())
+}
+
+/// Serialize a bitcoin transaction into a string
+/// Returns a hex encoded transaction string
+///
+/// # Arguments
+///
+/// * `tx` the transaction object
+pub fn serialize_btc_tx(tx : &Transaction) -> String {
+    serialize_hex(tx)
+}
+
+/// Deserialize a bitcoin transaction from a string
+/// Returns a bitcoin transaction object
+///
+/// # Arguments
+///
+/// * `str_tx` the transaction as a hex encoded string
+pub fn deserialize_btc_tx(str_tx : &String) -> Transaction {
+    deserialize(&hex::decode(str_tx).unwrap())
+        .unwrap()
+}
+
+
+#[test]
+fn test_script_serialization() {
+    let hex_script = String::from("0014ebcf32c56219bb6782aa51895451f1d818b50af5");
+    let script = deserialize_script(&hex_script);
+    let serialized = serialize_script(&script);
+    assert_eq!(hex_script, serialized);
+}
+
+#[test]
+fn test_tx_serialization() {
+    let tx_str = String::from("0100000001a5b9ee765b9d78bb40e7c24005246de8aedf796089474a187041b45c3183ebe3000000006a473045022100e328a3960f10a5d24fda55fedcc71a88d5b0ff431029cd7568f2f0076bcf2a8b022018e57b708b2ad18916296b1cef625468c889064d65bca304e5a8a9e5a4f692172103c7eafa9bb32d43b88580ddd259aab1c76b8f1749ae43a343add030884edaae99ffffffff01be0000000000000017a91424f9fd677d9f32cdf976cf0ca146d55a3ece4d038700000000");
+    let tx = deserialize_btc_tx(&tx_str);
+    let serialized = serialize_btc_tx(&tx);
+    assert_eq!(tx_str, serialized);
+}
+
 #[test]
 fn test_create_lock_tx() {
     let mut rng = util::get_os_rng();
@@ -197,6 +257,9 @@ fn test_create_lock_tx() {
         String::from(inp_pk_hex), 
         String::from("0014ebcf32c56219bb6782aa51895451f1d818b50af5")
     );
-    let tx = create_lock_transaction(alice_pk, pub_x, bob_pk, vec![inp], 200, 10, 9000);
-    let signed_tx = sign_transaction(tx, vec![inp.pub_script], vec![inp_key], vec![inp_pk], &secp);
+    let tx = create_lock_transaction(alice_pk, pub_x, bob_pk, vec![inp.clone()], 200, 10, 9000);
+    let inp_script = deserialize_script(&inp.pub_script);
+    let signed_tx = sign_transaction(tx, vec![inp_script], vec![inp_key], vec![inp_pk], &secp);
+    let str_tx = serialize_btc_tx(&signed_tx);
+    println!("{}", str_tx);
 }
