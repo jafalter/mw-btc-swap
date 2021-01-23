@@ -1,5 +1,5 @@
 use crate::{constants::SIGHASH_ALL, util};
-use bitcoin::{blockdata::opcodes::all::OP_ELSE, consensus::encode::serialize_hex, consensus::encode::deserialize};
+use bitcoin::{PubkeyHash, blockdata::opcodes::{self, all::OP_ELSE}, consensus::encode::deserialize, consensus::encode::serialize_hex};
 use bitcoin::blockdata::opcodes::all::OP_CSV;
 use bitcoin::blockdata::opcodes::all::OP_CLTV;
 use bitcoin::blockdata::opcodes::all::OP_DROP;
@@ -49,13 +49,15 @@ pub fn create_private_key(rng : &mut OsRng) -> PrivateKey {
 /// * `recv_pk` the receivers public key
 /// * `pub_x` the statement pub_x = g^x for which the receivers needs to get x in order to spend this ouput
 /// * `refund_pk` the public key of the sender which can be spent after refund time refund_time
+/// * `change_pk` the change coin output public key
 /// * `inputs` the inputs spend in this transaction
 /// * `amount` the amount which should be locked
 /// * `fee` the miners fee
 /// * `refund_time` timelock for when this output should be spendable be the refunder
-pub fn create_lock_transaction(recv_pk : PublicKey, pub_x : PublicKey, refund_pk : PublicKey, inputs : Vec<BTCInput>, amount: u64, fee: u64, refund_time : i64) -> Transaction {
+pub fn create_lock_transaction(recv_pk : PublicKey, pub_x : PublicKey, refund_pk : PublicKey, change_pk : PublicKey, inputs : Vec<BTCInput>, amount: u64, fee: u64, refund_time : i64) -> Result<Transaction,String> {
     let mut txinp : Vec<TxIn> = Vec::new();
     let mut txout : Vec<TxOut> = Vec::new();
+    let mut inp_amount : u64 = 0;
 
     // Create the transaction inputs
     for btcinp in inputs {
@@ -64,6 +66,7 @@ pub fn create_lock_transaction(recv_pk : PublicKey, pub_x : PublicKey, refund_pk
         let outpoint = OutPoint::new(txid, btcinp.vout);
         let script_sig = Script::new();
         let witness_data : Vec<Vec<u8>> = Vec::new();
+        inp_amount = inp_amount + btcinp.value;
         txinp.push(TxIn{
             previous_output : outpoint,
             script_sig : script_sig,
@@ -71,18 +74,30 @@ pub fn create_lock_transaction(recv_pk : PublicKey, pub_x : PublicKey, refund_pk
             witness : witness_data
         });
     }
-    let script_pub = get_lock_pub_script(recv_pk, pub_x, refund_pk, refund_time);
-    
-    txout.push(TxOut{
-        value : amount - fee,
-        script_pubkey : script_pub
-    });
 
-    Transaction {
-        version : 1,
-        lock_time : 0,
-        input: txinp,
-        output: txout
+    if inp_amount < (amount + fee) {
+        Err(String::from("Input coin amount is too little"))
+    }
+    else {
+        let lock_script_pub = get_lock_pub_script(recv_pk, pub_x, refund_pk, refund_time);
+        txout.push(TxOut{
+            value : amount,
+            script_pubkey : lock_script_pub
+        });
+
+        // Change output
+        let ch_script_pub = get_p2pkh_pub_script(&change_pk);
+        txout.push(TxOut{
+            value : inp_amount - amount - fee,
+            script_pubkey : ch_script_pub
+        });
+
+        Ok(Transaction {
+            version : 1,
+            lock_time : 0,
+            input: txinp,
+            output: txout
+        })
     }
 }
 
@@ -120,6 +135,15 @@ pub fn get_lock_pub_script(recv_pk : PublicKey, pub_x : PublicKey, refund_pk : P
     Script::new_p2sh(&builder.into_script().script_hash())
 }
 
+/// Create a P2PKH transaction output
+///
+/// # Arguments
+///
+/// * `recv_pk` the receiver public key
+pub fn get_p2pkh_pub_script(recv_pk : &PublicKey) -> Script {
+    Script::new_p2pkh(&recv_pk.pubkey_hash())
+}
+
 /// Converts a bitcoin pub script into a Bitcoin Address
 /// 
 /// # Arguments
@@ -149,10 +173,13 @@ pub fn sign_transaction(tx : Transaction, script_pubkeys : Vec<Script>, skeys : 
         let sighash = tx.signature_hash(i, &script_pubkey, SIGHASH_ALL);
         let msg = Message::from_slice(&sighash.as_ref()).unwrap();
         let sig = curve.sign(&msg, &signing_key);
+        let mut sig_der  = sig.serialize_der().to_vec();
+        sig_der.push(1);
+
         // Standard P2PKH redeem script:
         // <sig> <pubkey>
         let redeem_script = Builder::new()
-            .push_slice(sig.serialize_der().as_ref())
+            .push_slice(&sig_der)
             .push_key(&pub_key)
             .into_script();
         signed_inp.push(TxIn {
@@ -161,7 +188,6 @@ pub fn sign_transaction(tx : Transaction, script_pubkeys : Vec<Script>, skeys : 
             sequence : unsigned_inp.sequence,
             witness : unsigned_inp.witness.clone()
         });
-        
     }
     
     Transaction {
@@ -237,29 +263,34 @@ fn test_create_lock_tx() {
     let mut rng = util::get_os_rng();
     let secp = util::get_secp256k1_curve();
 
-    let inp_key_wif = String::from("cVnL2Ke9yjTivhuHLmkhtYVaNTmYXKpikNfg5GWdovSEvJcfyfCy");
+    let inp_key_wif = String::from("cT3s7TL2eRVWF1r1SVEmaXG8ketwmtrsy3T2ZygCqbkQR6wWYMYH");
     let inp_key = PrivateKey::from_wif(&inp_key_wif)
         .unwrap();
     let inp_pk = PublicKey::from_private_key(&secp, &inp_key);
     let inp_pk_hex = hex::encode(&inp_pk.to_bytes());
+    let inp_value = 1969926; 
 
     let bob_sk = create_private_key(&mut rng);
     let alice_sk = create_private_key(&mut rng);
     let x = create_private_key(&mut rng);
+    let change_sk = create_private_key(&mut rng);
     let bob_pk = PublicKey::from_private_key(&secp, &bob_sk);
     let alice_pk = PublicKey::from_private_key(&secp, &alice_sk);
     let pub_x = PublicKey::from_private_key(&secp, &x);
+    let pub_ch = PublicKey::from_private_key(&secp, &change_sk);
     let inp = BTCInput::new(
-        String::from("e3eb83315cb44170184a47896079dfaee86d240540c2e740bb789d5b76eeb9a5"), 
-        0, 
-        1000000, 
-        String::from("cVnL2Ke9yjTivhuHLmkhtYVaNTmYXKpikNfg5GWdovSEvJcfyfCy"),
+        String::from("213c134eaf574f0251c393a0400c41679f4d1d1d285370059bc3360fa1a0410b"), 
+        1, 
+        inp_value, 
+        inp_key_wif,
         String::from(inp_pk_hex), 
-        String::from("0014ebcf32c56219bb6782aa51895451f1d818b50af5")
+        String::from("76a91411773ed6a110e617a77dd122435c43d8668ab42088ac")
     );
-    let tx = create_lock_transaction(alice_pk, pub_x, bob_pk, vec![inp.clone()], 200, 10, 9000);
+    let tx = create_lock_transaction(alice_pk, pub_x, bob_pk, pub_ch, vec![inp.clone()], 1000, 500, 1905600)
+        .unwrap();
     let inp_script = deserialize_script(&inp.pub_script);
     let signed_tx = sign_transaction(tx, vec![inp_script], vec![inp_key], vec![inp_pk], &secp);
     let str_tx = serialize_btc_tx(&signed_tx);
+    println!("Change output sk: {}", change_sk.to_wif());
     println!("{}", str_tx);
 }
