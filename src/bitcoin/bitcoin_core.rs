@@ -326,7 +326,8 @@ use crate::bitcoin::btcroutines::create_lock_transaction;
             pub_key : "b72c00b3e55433d3266d184cf8a8916892aba28023cd46db617f36cac1ebcf8e".to_string(),
             pub_script : "b72c00b3e55433d3266d184cf8a8916892aba28023cd46db617f36cac1ebcf8e".to_string()
         });
-        let tx = create_lock_transaction(pk, pk, pk, inp, 1000, 1, 50000);
+        let tx = create_lock_transaction(pk, pk, pk, pk,inp, 1000, 1, 50000)
+            .unwrap();
         let r = core.send_raw_transaction(tx);
         assert_eq!(Ok(()), r);
     }
@@ -351,7 +352,8 @@ use crate::bitcoin::btcroutines::create_lock_transaction;
             pub_key : "b72c00b3e55433d3266d184cf8a8916892aba28023cd46db617f36cac1ebcf8e".to_string(),
             pub_script : "b72c00b3e55433d3266d184cf8a8916892aba28023cd46db617f36cac1ebcf8e".to_string()
         });
-        let tx = create_lock_transaction(pk, pk, pk, inp, 1000, 1, 50000);
+        let tx = create_lock_transaction(pk, pk, pk, pk, inp, 1000, 1, 50000)
+            .unwrap();
         let r = core.send_raw_transaction(tx);
         assert_eq!(r.err(), Some(String::from("RPC Request and Response id didn't match"))); 
     }
@@ -376,7 +378,8 @@ use crate::bitcoin::btcroutines::create_lock_transaction;
             pub_key : "b72c00b3e55433d3266d184cf8a8916892aba28023cd46db617f36cac1ebcf8e".to_string(),
             pub_script : "b72c00b3e55433d3266d184cf8a8916892aba28023cd46db617f36cac1ebcf8e".to_string()
         });
-        let tx = create_lock_transaction(pk, pk, pk, inp, 1000, 1, 50000);
+        let tx = create_lock_transaction(pk, pk, pk, pk, inp, 1000, 1, 50000)
+            .unwrap();
         let r = core.send_raw_transaction(tx);
         assert_eq!(r.err(), Some(String::from("Invalid inputs")));
     }
