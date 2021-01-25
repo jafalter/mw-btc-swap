@@ -1,5 +1,5 @@
 use crate::{constants::SIGHASH_ALL, util};
-use bitcoin::{PubkeyHash, blockdata::opcodes::{self, all::OP_ELSE}, consensus::encode::deserialize, consensus::encode::serialize_hex};
+use bitcoin::{PubkeyHash, blockdata::opcodes::{self, all::{OP_ELSE, OP_ENDIF}}, consensus::encode::deserialize, consensus::encode::serialize_hex, secp256k1::Signature};
 use bitcoin::blockdata::opcodes::all::OP_CSV;
 use bitcoin::blockdata::opcodes::all::OP_CLTV;
 use bitcoin::blockdata::opcodes::all::OP_DROP;
@@ -7,6 +7,8 @@ use bitcoin::blockdata::opcodes::all::OP_IF;
 use bitcoin::blockdata::script::Builder;
 use bitcoin::Transaction;
 use bitcoin::TxOut;
+use opcodes::{OP_FALSE, OP_TRUE, all::{OP_CHECKMULTISIG, OP_CHECKMULTISIGVERIFY, OP_CHECKSIG, OP_CHECKSIGVERIFY}};
+use serde_json::to_vec;
 use crate::constants::FFFFFFFF;
 use bitcoin::Script;
 use bitcoin::OutPoint;
@@ -79,7 +81,7 @@ pub fn create_lock_transaction(recv_pk : PublicKey, pub_x : PublicKey, refund_pk
         Err(String::from("Input coin amount is too little"))
     }
     else {
-        let lock_script_pub = get_lock_pub_script(recv_pk, pub_x, refund_pk, refund_time);
+        let lock_script_pub = get_lock_pub_script(recv_pk, pub_x, refund_pk, refund_time,true);
         txout.push(TxOut{
             value : amount,
             script_pubkey : lock_script_pub
@@ -101,6 +103,51 @@ pub fn create_lock_transaction(recv_pk : PublicKey, pub_x : PublicKey, refund_pk
     }
 }
 
+/// Create a unsigned transaction fully spending the locked input to a p2pkh output
+///
+/// # Arguments
+///
+/// * `recv_pk` key to be used for the p2pkh output
+/// * `input` the locked input to be spend
+/// * `amount` the amount for the output
+/// * `fee` the fee given to miners, note that amount + fee must equal the value of the locked coin
+pub fn create_spend_lock_transaction(recv_pk : &PublicKey, input : BTCInput, amount : u64, fee : u64) -> Result<Transaction,String> {
+    let mut txinp : Vec<TxIn> = Vec::new();
+    let mut txout : Vec<TxOut> = Vec::new();
+
+    let inp_amount : u64 = input.value;
+
+    // Add the input
+    let txid = Txid::from_hash(Hash::from_str(&input.txid).unwrap());
+    let outpoint = OutPoint::new(txid, input.vout);
+    let script_sig = Script::new();
+    let witness_data : Vec<Vec<u8>> = Vec::new();
+    txinp.push(TxIn {
+        previous_output : outpoint,
+        script_sig : script_sig,
+        sequence : FFFFFFFF,
+        witness : witness_data
+    });
+
+    if inp_amount != amount {
+        Err(String::from("Please fully redeem input coin"))
+    }
+    else {
+        let out_script = Script::new_p2pkh(&recv_pk.pubkey_hash());
+        txout.push(TxOut{
+            value : amount - fee,
+            script_pubkey : out_script
+        });
+
+        Ok(Transaction {
+            version : 1,
+            lock_time : 0,
+            input : txinp,
+            output : txout
+        })
+    }
+}
+
 /// Create the transaction output which is a single P2SH script of the form
 /// OP_IF 
 ///  <refund_time>
@@ -110,29 +157,35 @@ pub fn create_lock_transaction(recv_pk : PublicKey, pub_x : PublicKey, refund_pk
 ///  OP_CHECKSIGVERIFY
 /// OP_ELSE
 ///  2 <recv_pub_key> <X> 2 CHECKMULTISIGVERIFY
-///
+/// OP_ENDIF
 /// # Arguments
 /// 
 /// * `recv_pk` the receivers public key
 /// * `pub_x` the statement pub_x = g^x for which the receivers needs to get x in order to spend this ouput
 /// * `refund_pk` the public key of the sender which can be spent after refund time refund_time
 /// * `refund_time` timelock for when this output should be spendable be the refunder
-pub fn get_lock_pub_script(recv_pk : PublicKey, pub_x : PublicKey, refund_pk : PublicKey, refund_time : i64) -> Script {
+pub fn get_lock_pub_script(recv_pk : PublicKey, pub_x : PublicKey, refund_pk : PublicKey, refund_time : i64, wrap_in_p2sh : bool) -> Script {
     let builder = Builder::new()
         .push_opcode(OP_IF)
         .push_int(refund_time)
         .push_opcode(OP_CLTV)
         .push_opcode(OP_DROP)
         .push_key(&refund_pk)
-        .push_opcode(OP_CSV)
+        .push_opcode(OP_CHECKSIG)
         .push_opcode(OP_ELSE)
-        .push_int(2)
+        .push_opcode(opcodes::all::OP_PUSHNUM_2)
         .push_key(&recv_pk)
         .push_key(&pub_x)
-        .push_int(2)
-        .push_opcode(OP_CSV);
-
-    Script::new_p2sh(&builder.into_script().script_hash())
+        .push_opcode(opcodes::all::OP_PUSHNUM_2)
+        .push_opcode(OP_CHECKMULTISIG)
+        .push_opcode(OP_ENDIF);
+    if wrap_in_p2sh {
+        Script::new_p2sh(&builder.into_script().script_hash())
+    }
+    else {
+        builder.into_script()
+    }
+    
 }
 
 /// Create a P2PKH transaction output
@@ -163,18 +216,17 @@ pub fn script_to_address(s : Script) -> Address {
 /// * `skeys` list of secret keys with which to sign the inputs (has to be indexed in the same order as the inputs in the transaction)
 /// * `pkeys` list of public keys for the inputs which are spent (has to be indexed in the same order as the inputs in the transaction)
 /// * `curve` reference to the elliptic curve object used for signing
-pub fn sign_transaction(tx : Transaction, script_pubkeys : Vec<Script>, skeys : Vec<PrivateKey>, pkeys: Vec<PublicKey>, curve : &Secp256k1<All>) -> Transaction {
+pub fn sign_p2pkh_transaction(tx : Transaction, script_pubkeys : Vec<Script>, skeys : Vec<PrivateKey>, pkeys: Vec<PublicKey>, secp : &Secp256k1<All>) -> Transaction {
     let mut signed_inp : Vec<TxIn> = Vec::new();
 
     for (i, unsigned_inp) in tx.input.iter().enumerate() {
         let script_pubkey = script_pubkeys.get(i).unwrap();
         let signing_key = skeys.get(i).unwrap().key;
         let pub_key = pkeys.get(i).unwrap();
-        let sighash = tx.signature_hash(i, &script_pubkey, SIGHASH_ALL);
+        let sighash = tx.signature_hash(i, &script_pubkey, SIGHASH_ALL.into());
         let msg = Message::from_slice(&sighash.as_ref()).unwrap();
-        let sig = curve.sign(&msg, &signing_key);
-        let mut sig_der  = sig.serialize_der().to_vec();
-        sig_der.push(1);
+        let sig = secp.sign(&msg, &signing_key);
+        let sig_der = serialize_sig_der_with_sighash(&sig, SIGHASH_ALL);
 
         // Standard P2PKH redeem script:
         // <sig> <pubkey>
@@ -195,6 +247,74 @@ pub fn sign_transaction(tx : Transaction, script_pubkeys : Vec<Script>, skeys : 
         lock_time : tx.lock_time,
         input : signed_inp,
         output: tx.output
+    }
+}
+
+/// Serialize a signature into bytes with the SIGHASH flag appened inside
+/// the signature which is how Bitcoin Script expects it
+///
+/// # Arguments
+/// 
+/// * `sig` the signature to serialize
+/// * `sig_hash` the SIGHASH flag to be appended
+pub fn serialize_sig_der_with_sighash(sig : &Signature, sig_hash : u8) -> Vec<u8> {
+    let mut sig_der = sig.serialize_der().to_vec();
+    sig_der.push(sig_hash);
+    sig_der
+}
+
+/// Sign a transaction spending the lock P2SH output as the redeemer
+/// Returns a version of the transaction in which the locked input
+/// is signed 
+///
+/// # Arguments
+///
+/// * `tx` the transaction spending from the locked output
+/// * `ix` the index of the input to spend
+/// * `lock_script` The locking script we need to present 
+/// * `sk` the private key with which to sign
+/// * `x` the secrete witness with which to sign
+/// * `secp` curve functionalities
+pub fn sign_lock_transaction_redeemer(tx : Transaction, ix : usize, lock_script : Script, sk : PrivateKey, x : PrivateKey, secp : &Secp256k1<All>) -> Transaction {
+    let mut signed_inp : Vec<TxIn> = Vec::new();
+
+    // Iterate through intputs and sign for input at index ix
+    for (i, unsigned_inp) in tx.input.iter().enumerate() {
+        if i == ix {
+            let sighash = tx.signature_hash(ix, &lock_script, SIGHASH_ALL.into());
+            println!("msg: {}", hex::encode(&sighash.as_ref()));
+            let msg = Message::from_slice(&sighash.as_ref())
+                .unwrap();
+            let sig_a = secp.sign(&msg, &sk.key);
+            let sig_x = secp.sign(&msg, &x.key);
+            let sig_a_der = serialize_sig_der_with_sighash(&sig_a, SIGHASH_ALL);
+            let sig_x_der = serialize_sig_der_with_sighash(&sig_x, SIGHASH_ALL);
+            let lock_script_bytes: Vec<u8> = lock_script.to_bytes();
+            // Now we need to combine the original P2SH script and the actual redeem script
+            let fin_script = Builder::new()
+                .push_opcode(opcodes::all::OP_PUSHBYTES_0)
+                .push_slice(&sig_a_der)
+                .push_slice(&sig_x_der)
+                .push_opcode(opcodes::all::OP_PUSHBYTES_0) // To make the IF validate to false
+                .push_slice(&lock_script_bytes)
+                .into_script();
+            signed_inp.push(TxIn {
+                previous_output : unsigned_inp.previous_output,
+                script_sig : fin_script,
+                sequence : unsigned_inp.sequence,
+                witness : unsigned_inp.witness.clone()
+            });
+        }
+        else {
+            signed_inp.push(unsigned_inp.clone());
+        }
+    }
+
+    Transaction {
+        version : tx.version,
+        lock_time : tx.lock_time,
+        input : signed_inp,
+        output : tx.output
     }
 }
 
@@ -263,12 +383,15 @@ fn test_create_lock_tx() {
     let mut rng = util::get_os_rng();
     let secp = util::get_secp256k1_curve();
 
-    let inp_key_wif = String::from("cT3s7TL2eRVWF1r1SVEmaXG8ketwmtrsy3T2ZygCqbkQR6wWYMYH");
+    let inp_key_wif = String::from("cW8X9QVqY9zy15Jj2qCReTjz3Sf43dHDE3UxfXdrMvzafyDkNpsp");
+    let inp_value = 1264926;
+    let inp_vout = 1;
+    let inp_txid = String::from("f93e9fcae3010842d0b7c5ee3193bbb682674afc3bdab08d135c4b66825b615e");
+    let inp_pub_script = String::from("76a914da87181a5ad9ce151d3695d61be7957e6d860ac988ac"); 
     let inp_key = PrivateKey::from_wif(&inp_key_wif)
         .unwrap();
     let inp_pk = PublicKey::from_private_key(&secp, &inp_key);
-    let inp_pk_hex = hex::encode(&inp_pk.to_bytes());
-    let inp_value = 1969926; 
+    let inp_pk_hex = hex::encode(&inp_pk.to_bytes()); 
 
     let bob_sk = create_private_key(&mut rng);
     let alice_sk = create_private_key(&mut rng);
@@ -278,19 +401,65 @@ fn test_create_lock_tx() {
     let alice_pk = PublicKey::from_private_key(&secp, &alice_sk);
     let pub_x = PublicKey::from_private_key(&secp, &x);
     let pub_ch = PublicKey::from_private_key(&secp, &change_sk);
+    println!("Bob sk: {}", bob_sk.to_wif());
+    println!("Alice sk: {}", alice_sk.to_wif());
+    println!("x: {}", x.to_wif());
+    println!("Change output sk: {}", change_sk.to_wif());
     let inp = BTCInput::new(
-        String::from("213c134eaf574f0251c393a0400c41679f4d1d1d285370059bc3360fa1a0410b"), 
-        1, 
+        inp_txid, 
+        inp_vout, 
         inp_value, 
         inp_key_wif,
         String::from(inp_pk_hex), 
-        String::from("76a91411773ed6a110e617a77dd122435c43d8668ab42088ac")
+        inp_pub_script
     );
-    let tx = create_lock_transaction(alice_pk, pub_x, bob_pk, pub_ch, vec![inp.clone()], 1000, 500, 1905600)
+    let tx = create_lock_transaction(alice_pk, pub_x, bob_pk, pub_ch, vec![inp.clone()], 100000, 500, 1906706)
         .unwrap();
     let inp_script = deserialize_script(&inp.pub_script);
-    let signed_tx = sign_transaction(tx, vec![inp_script], vec![inp_key], vec![inp_pk], &secp);
+    let signed_tx = sign_p2pkh_transaction(tx, vec![inp_script], vec![inp_key], vec![inp_pk], &secp);
     let str_tx = serialize_btc_tx(&signed_tx);
     println!("Change output sk: {}", change_sk.to_wif());
+
     println!("{}", str_tx);
+}
+
+#[test]
+fn test_redeem_from_lock_tx() {
+    let mut rng = util::get_os_rng();
+    let secp = util::get_secp256k1_curve();
+
+    let txid = String::from("0541c47eefc6ea2eca7e8e3429fcf1b1a2a5db6d8b545ddf1c1d0d7f71cb780d");
+    let vout = 0;
+    let refund_time = 1906706;
+    let bob_sk_wif = String::from("cViWkEetJvh9mZyKLGBLsg7L3N33aS5T51w13hm64JUqWnbxypRd");
+    let alice_sk_wif = String::from("cPsNfSZhVe9XhnsCzWkK8xW5GecmNfjoPrkuA8xv2XSmGcPstfcD");
+    let x_wif = String::from("cVY2yARFZaBQ747y4j9UdwFBHJQ4siZcrahiKXaVX4YapKXFhdQX");
+    let inp_value = 100000;
+    let inp_pub_script = String::from("a9141c9dddd2ab79dc09764b5700a12887f2d6d95eee87");
+    let fee = 500;
+
+    let bob_sk = PrivateKey::from_wif(&bob_sk_wif)
+        .unwrap();
+    let alice_sk = PrivateKey::from_wif(&alice_sk_wif)
+        .unwrap();
+    let x = PrivateKey::from_wif(&x_wif)
+        .unwrap();
+
+    let recv_key = create_private_key(&mut rng);
+    let pub_recv = PublicKey::from_private_key(&secp, &recv_key);
+    println!("Receivers secret key: {}", recv_key.to_wif());
+
+    let inp = BTCInput::new(txid, vout, inp_value, alice_sk.to_wif(), PublicKey::from_private_key(&secp, &alice_sk).to_string(), inp_pub_script.clone());
+
+    let tx = create_spend_lock_transaction(&pub_recv, inp, inp_value, fee)
+        .unwrap();
+    let lock_script = get_lock_pub_script(
+        PublicKey::from_private_key(&secp, &alice_sk), 
+        PublicKey::from_private_key(&secp, &x), 
+        PublicKey::from_private_key(&secp, &bob_sk),
+         refund_time, false);
+
+    let signed_tx = sign_lock_transaction_redeemer(tx, 0, lock_script, alice_sk, x, &secp);
+    let ser_tx = serialize_btc_tx(&signed_tx);
+    println!("{}", ser_tx);
 }
