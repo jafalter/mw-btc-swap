@@ -336,3 +336,74 @@ txid: 0541c47eefc6ea2eca7e8e3429fcf1b1a2a5db6d8b545ddf1c1d0d7f71cb780d
 ],
 }
 }
+
+--------------------------------------------------------------------------------------------------
+
+Bob sk: cVrbE7Bb5hNAcwaSYfF2ZexnG4n5c8tR7XjUPwJdGFwtZKsZ5DGc
+Alice sk: cTmYKuV5UijUQuAyudcvtZzuP4VvSEawkQ6aaYuCPqJxfiPDMwAP
+x: cNhB2qnmJ3Kgfhf1fuC4hQsMUZL5p3GnM5WLxfu2YwQXcEHgix94
+Change output sk: cNktLpEhR2NqaiaFsFUuUSabDdtrnYYK45jjdfYmJNEFJnbqYBML
+Change output sk: cNktLpEhR2NqaiaFsFUuUSabDdtrnYYK45jjdfYmJNEFJnbqYBML
+"txid": "9c6fb406aa90c2749b8fee229e13094ac3a32264cad4aa6658f2f3854ec8cff1",
+
+  {
+"value": 0.001,
+"n": 0,
+"scriptPubKey": {
+"asm": "OP_HASH160 6132245a052583a26473eb40352594ecbff02bfe OP_EQUAL",
+"hex": "a9146132245a052583a26473eb40352594ecbff02bfe87",
+"reqSigs": 1,
+"type": "scripthash",
+"addresses": [
+  "2N279bpSAifMZDY3umszFL8dzocB7aBi3iH"
+],
+}
+},
+  {
+"value": 0.01063926,
+"n": 1,
+"scriptPubKey": {
+"asm": "OP_DUP OP_HASH160 e86c5a9fab55d60fde27ae842da8eab82a3b7707 OP_EQUALVERIFY OP_CHECKSIG",
+"hex": "76a914e86c5a9fab55d60fde27ae842da8eab82a3b770788ac",
+"reqSigs": 1,
+"type": "pubkeyhash",
+"addresses": [
+  "n2hts8Hp5JsqKymgL3BmxpHzsiTkRdiQaX"
+],
+}
+}
+
+-------------------------------------------------------------------------------------------
+
+Bob sk: cSw9zXxhMj62abxLsr85AkoafazySQcQaASpu4r7LCByLCfcLYkY
+Alice sk: cQojWvqUvSpZsuwemQ3ed97JPRWBhTh2izkoSm39pSuUovbwzBxb
+x: cSpMwozozPVugemQ3VVFU2EZqKZxu4GnwG2GXHoj2pytE3jm4Z1g
+Change output sk: cUHEf247qVSQusmQX1qKpYKYkoJcLVG6WyR4UzEy1oNHBLM1eJop
+txid: 9c6fb406aa90c2749b8fee229e13094ac3a32264cad4aa6658f2f3854ec8cff1
+
+{
+"value": 0.001,
+"n": 0,
+"scriptPubKey": {
+"asm": "OP_HASH160 de6656405302bea85edc1cb7ac254c8d3678f74e OP_EQUAL",
+"hex": "a914de6656405302bea85edc1cb7ac254c8d3678f74e87",
+"reqSigs": 1,
+"type": "scripthash",
+"addresses": [
+  "2NDXAbN54hMeckfxPcEKq2pzF7nKy71PY14"
+],
+}
+},
+  {
+"value": 0.00963426,
+"n": 1,
+"scriptPubKey": {
+"asm": "OP_DUP OP_HASH160 449a8efdcfa451da30dc31f6d69dcf3dedb1a4fa OP_EQUALVERIFY OP_CHECKSIG",
+"hex": "76a914449a8efdcfa451da30dc31f6d69dcf3dedb1a4fa88ac",
+"reqSigs": 1,
+"type": "pubkeyhash",
+"addresses": [
+  "mmmhQ1rVU27GVq8ysSo8mTXRaPGGwBwNJp"
+],
+}
+}

@@ -282,7 +282,6 @@ pub fn sign_lock_transaction_redeemer(tx : Transaction, ix : usize, lock_script 
     for (i, unsigned_inp) in tx.input.iter().enumerate() {
         if i == ix {
             let sighash = tx.signature_hash(ix, &lock_script, SIGHASH_ALL.into());
-            println!("msg: {}", hex::encode(&sighash.as_ref()));
             let msg = Message::from_slice(&sighash.as_ref())
                 .unwrap();
             let sig_a = secp.sign(&msg, &sk.key);
@@ -313,6 +312,47 @@ pub fn sign_lock_transaction_redeemer(tx : Transaction, ix : usize, lock_script 
     Transaction {
         version : tx.version,
         lock_time : tx.lock_time,
+        input : signed_inp,
+        output : tx.output
+    }
+}
+
+/// Sign a transaction spending the lock P2SH output as the refunder
+/// Returns a version of the transaction in which the locked input
+/// is signed.
+/// The transaction will only validate once the locktime was reached
+pub fn sign_lock_transaction_refund(tx : Transaction, ix : usize, lock_script : Script, sk: PrivateKey, lock_time : u32, secp : &Secp256k1<All>) -> Transaction {
+    let mut signed_inp : Vec<TxIn> = Vec::new();
+
+    // Iterate through inputs and sign for input at index ix
+    for (i, unsigned_inp) in tx.input.iter().enumerate() {
+        if i == ix {
+            let sighash = tx.signature_hash(ix, &lock_script, SIGHASH_ALL.into());
+            let msg = Message::from_slice(&sighash.as_ref())
+                .unwrap();
+            let sig = secp.sign(&msg, &sk.key);
+            let sig_der = serialize_sig_der_with_sighash(&sig, SIGHASH_ALL);
+            let lock_script_bytes : Vec<u8> = lock_script.to_bytes();
+            let fin_script = Builder::new()
+                .push_slice(&sig_der)
+                .push_opcode(opcodes::all::OP_PUSHBYTES_1) // To make IF evaluate to true
+                .push_slice(&lock_script_bytes)
+                .into_script();
+            signed_inp.push(TxIn {
+                previous_output : unsigned_inp.previous_output,
+                script_sig : fin_script,
+                sequence : 0, // Need to be 0 for the OP_CHECKLOCKTIME to verify
+                witness : unsigned_inp.witness.clone()
+            })
+        }
+        else {
+            signed_inp.push(unsigned_inp.clone());
+        }
+    }
+
+    Transaction {
+        version : tx.version,
+        lock_time : lock_time, // Needs to be set such that the OP_CHECKLOCKTIME verifies
         input : signed_inp,
         output : tx.output
     }
@@ -383,11 +423,11 @@ fn test_create_lock_tx() {
     let mut rng = util::get_os_rng();
     let secp = util::get_secp256k1_curve();
 
-    let inp_key_wif = String::from("cW8X9QVqY9zy15Jj2qCReTjz3Sf43dHDE3UxfXdrMvzafyDkNpsp");
-    let inp_value = 1264926;
+    let inp_key_wif = String::from("cNktLpEhR2NqaiaFsFUuUSabDdtrnYYK45jjdfYmJNEFJnbqYBML");
+    let inp_value = 1063926;
     let inp_vout = 1;
-    let inp_txid = String::from("f93e9fcae3010842d0b7c5ee3193bbb682674afc3bdab08d135c4b66825b615e");
-    let inp_pub_script = String::from("76a914da87181a5ad9ce151d3695d61be7957e6d860ac988ac"); 
+    let inp_txid = String::from("9c6fb406aa90c2749b8fee229e13094ac3a32264cad4aa6658f2f3854ec8cff1");
+    let inp_pub_script = String::from("76a914e86c5a9fab55d60fde27ae842da8eab82a3b770788ac"); 
     let inp_key = PrivateKey::from_wif(&inp_key_wif)
         .unwrap();
     let inp_pk = PublicKey::from_private_key(&secp, &inp_key);
@@ -413,7 +453,7 @@ fn test_create_lock_tx() {
         String::from(inp_pk_hex), 
         inp_pub_script
     );
-    let tx = create_lock_transaction(alice_pk, pub_x, bob_pk, pub_ch, vec![inp.clone()], 100000, 500, 1906706)
+    let tx = create_lock_transaction(alice_pk, pub_x, bob_pk, pub_ch, vec![inp.clone()], 100000, 500, 1906254)
         .unwrap();
     let inp_script = deserialize_script(&inp.pub_script);
     let signed_tx = sign_p2pkh_transaction(tx, vec![inp_script], vec![inp_key], vec![inp_pk], &secp);
@@ -460,6 +500,46 @@ fn test_redeem_from_lock_tx() {
          refund_time, false);
 
     let signed_tx = sign_lock_transaction_redeemer(tx, 0, lock_script, alice_sk, x, &secp);
+    let ser_tx = serialize_btc_tx(&signed_tx);
+    println!("{}", ser_tx);
+}
+
+#[test]
+fn test_refund_from_lock_tx() {
+    let mut rng = util::get_os_rng();
+    let secp = util::get_secp256k1_curve();
+
+    let txid = String::from("9c6fb406aa90c2749b8fee229e13094ac3a32264cad4aa6658f2f3854ec8cff1");
+    let vout = 0;
+    let refund_time : u32 = 1906254;
+    let bob_sk_wif = String::from("cSw9zXxhMj62abxLsr85AkoafazySQcQaASpu4r7LCByLCfcLYkY");
+    let alice_sk_wif = String::from("cQojWvqUvSpZsuwemQ3ed97JPRWBhTh2izkoSm39pSuUovbwzBxb");
+    let x_wif = String::from("cSpMwozozPVugemQ3VVFU2EZqKZxu4GnwG2GXHoj2pytE3jm4Z1g");
+    let inp_value = 100000;
+    let inp_pub_script = String::from("a914de6656405302bea85edc1cb7ac254c8d3678f74e87");
+    let fee = 500;
+
+    let bob_sk = PrivateKey::from_wif(&bob_sk_wif)
+        .unwrap();
+    let alice_sk = PrivateKey::from_wif(&alice_sk_wif)
+        .unwrap();
+    let x = PrivateKey::from_wif(&x_wif)
+        .unwrap();
+
+    let recv_key = create_private_key(&mut rng);
+    let pub_recv = PublicKey::from_private_key(&secp, &recv_key);
+    println!("Receivers secret key: {}", recv_key.to_wif());
+
+    let inp = BTCInput::new(txid, vout, inp_value, alice_sk.to_wif(), PublicKey::from_private_key(&secp, &alice_sk).to_string(), inp_pub_script.clone());
+
+    let tx = create_spend_lock_transaction(&pub_recv, inp, inp_value, fee)
+        .unwrap();
+    let lock_script = get_lock_pub_script(
+        PublicKey::from_private_key(&secp, &alice_sk), 
+        PublicKey::from_private_key(&secp, &x), 
+        PublicKey::from_private_key(&secp, &bob_sk),
+         refund_time.into(), false);
+    let signed_tx = sign_lock_transaction_refund(tx, 0, lock_script, bob_sk, refund_time, &secp);
     let ser_tx = serialize_btc_tx(&signed_tx);
     println!("{}", ser_tx);
 }
