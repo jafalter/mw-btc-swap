@@ -1,6 +1,6 @@
 use std::net::TcpStream;
 
-use crate::net::tcp::{read_from_stream, write_to_stream};
+use crate::{net::{http::RequestFactory, tcp::{read_from_stream, write_to_stream}}, settings::GrinNodeSettings};
 use grin_util::secp::{PublicKey, SecretKey};
 use grin_wallet_libwallet::Slate;
 
@@ -28,8 +28,8 @@ pub struct ContractMwResult {
 }
 
 impl GrinTx {
-    pub fn new() -> GrinTx {
-        let core = GrinCore::new();
+    pub fn new(settings : GrinNodeSettings, req_factory : RequestFactory) -> GrinTx {
+        let core = GrinCore::new(settings, req_factory);
         GrinTx { core: core }
     }
 

@@ -9,6 +9,15 @@ pub struct BtcNodeSettings {
     pub id : String
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct GrinNodeSettings {
+    pub url : String,
+    pub user : String,
+    pub pass : String,
+    pub port : u16,
+    pub id : String
+}
+
 impl BtcNodeSettings {
     pub fn clone(&self) -> BtcNodeSettings {
         BtcNodeSettings {
@@ -21,10 +30,22 @@ impl BtcNodeSettings {
     }
 }
 
+impl GrinNodeSettings {
+    pub fn clone(&self) -> GrinNodeSettings {
+        GrinNodeSettings {
+            url: self.url.clone(),
+            user : self.user.clone(),
+            pass : self.pass.clone(),
+            port : self.port,
+            id: self.id.clone()
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct Settings {
     pub btc: BtcNodeSettings,
-    pub mw_node_url: String,
+    pub grin : GrinNodeSettings,
     pub tcp_addr: String,
     pub tcp_port : String,
     pub slate_directory : String,

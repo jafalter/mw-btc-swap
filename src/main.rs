@@ -31,14 +31,13 @@ fn usage() {
 /// for example:
 /// SETTINGS_TCP_ADDR=alice
 fn overwrite_settings_with_env(settings : &Settings) -> Settings {
-    let mw_node_url = env::var("SETTINGS_MW_NODE_URL").unwrap_or(settings.mw_node_url.clone());
     let tcp_addr = env::var("SETTINGS_TCP_ADDR").unwrap_or(settings.tcp_addr.clone());
     let tcp_port = env::var("SETTINGS_TCP_PORT").unwrap_or(settings.tcp_port.clone());
     let slate_directory = env::var("SETTINGS_SLATE_DIRECTORY").unwrap_or(settings.slate_directory.clone());
 
     Settings{
         btc : settings.btc.clone(),
-        mw_node_url : mw_node_url,
+        grin : settings.grin.clone(),
         tcp_addr : tcp_addr,
         tcp_port : tcp_port,
         slate_directory : slate_directory
