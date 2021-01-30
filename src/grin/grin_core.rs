@@ -1,4 +1,4 @@
-use crate::{grin::grin_routines::*, net::http::RequestFactory, settings::GrinNodeSettings};
+use crate::{grin::grin_routines::*, net::http::{JsonRpc, RequestFactory}, settings::GrinNodeSettings};
 use crate::grin::grin_types::MWCoin;
 use crate::util::get_os_rng;
 use grin_core::core::transaction::OutputFeatures;
@@ -786,6 +786,21 @@ impl GrinCore {
         prt_s.neg_assign(&self.secp).unwrap();
         apt_s.add_assign(&self.secp, &prt_s).unwrap();
         apt_s
+    }
+
+    /// Return the current height of the blockchain
+    pub fn get_block_height(&mut self) -> u64 {
+        let rpc = JsonRpc::new(String::from("2.0"), self.settings.id.clone(), "get_tip", String::from(""));
+        let url = format!("http://{}:{}", self.settings.url, self.settings.port);
+        let req = self.req_factory.new_json_rpc_request(url, rpc, self.settings.user.clone(), self.settings.pass.clone());
+        match req.execute() {
+            Ok(x) => {
+                
+            }
+            Err(e) => {
+                Err(e.to_string())
+            }
+        }
     }
 }
 
