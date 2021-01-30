@@ -111,7 +111,7 @@ pub fn create_lock_transaction(recv_pk : PublicKey, pub_x : PublicKey, refund_pk
 /// * `input` the locked input to be spend
 /// * `amount` the amount for the output
 /// * `fee` the fee given to miners, note that amount + fee must equal the value of the locked coin
-pub fn create_spend_lock_transaction(recv_pk : &PublicKey, input : BTCInput, amount : u64, fee : u64) -> Result<Transaction,String> {
+pub fn create_spend_lock_transaction(recv_pk : &PublicKey, input : BTCInput, amount : u64, fee : u64, lock_time : u32) -> Result<Transaction,String> {
     let mut txinp : Vec<TxIn> = Vec::new();
     let mut txout : Vec<TxOut> = Vec::new();
 
@@ -125,7 +125,7 @@ pub fn create_spend_lock_transaction(recv_pk : &PublicKey, input : BTCInput, amo
     txinp.push(TxIn {
         previous_output : outpoint,
         script_sig : script_sig,
-        sequence : FFFFFFFF,
+        sequence : if lock_time == 0 { FFFFFFFF } else { 0 },
         witness : witness_data
     });
 
@@ -141,7 +141,7 @@ pub fn create_spend_lock_transaction(recv_pk : &PublicKey, input : BTCInput, amo
 
         Ok(Transaction {
             version : 1,
-            lock_time : 0,
+            lock_time : lock_time,
             input : txinp,
             output : txout
         })
@@ -321,7 +321,7 @@ pub fn sign_lock_transaction_redeemer(tx : Transaction, ix : usize, lock_script 
 /// Returns a version of the transaction in which the locked input
 /// is signed.
 /// The transaction will only validate once the locktime was reached
-pub fn sign_lock_transaction_refund(tx : Transaction, ix : usize, lock_script : Script, sk: PrivateKey, lock_time : u32, secp : &Secp256k1<All>) -> Transaction {
+pub fn sign_lock_transaction_refund(tx : Transaction, ix : usize, lock_script : Script, sk: PrivateKey, secp : &Secp256k1<All>) -> Transaction {
     let mut signed_inp : Vec<TxIn> = Vec::new();
 
     // Iterate through inputs and sign for input at index ix
@@ -335,13 +335,13 @@ pub fn sign_lock_transaction_refund(tx : Transaction, ix : usize, lock_script : 
             let lock_script_bytes : Vec<u8> = lock_script.to_bytes();
             let fin_script = Builder::new()
                 .push_slice(&sig_der)
-                .push_opcode(opcodes::all::OP_PUSHBYTES_1) // To make IF evaluate to true
+                .push_int(1) // To make the OP_IF evaluate to true
                 .push_slice(&lock_script_bytes)
                 .into_script();
             signed_inp.push(TxIn {
                 previous_output : unsigned_inp.previous_output,
                 script_sig : fin_script,
-                sequence : 0, // Need to be 0 for the OP_CHECKLOCKTIME to verify
+                sequence : unsigned_inp.sequence, // Need to be 0 for the OP_CHECKLOCKTIME to verify
                 witness : unsigned_inp.witness.clone()
             })
         }
@@ -352,7 +352,7 @@ pub fn sign_lock_transaction_refund(tx : Transaction, ix : usize, lock_script : 
 
     Transaction {
         version : tx.version,
-        lock_time : lock_time, // Needs to be set such that the OP_CHECKLOCKTIME verifies
+        lock_time : tx.lock_time, // Needs to be set such that the OP_CHECKLOCKTIME verifies
         input : signed_inp,
         output : tx.output
     }
@@ -420,14 +420,15 @@ fn test_tx_serialization() {
 
 #[test]
 fn test_create_lock_tx() {
-    let mut rng = util::get_os_rng();
-    let secp = util::get_secp256k1_curve();
+    let inp_key_wif = String::from("cTMx4ZMVW8b1JrfURdi8pqRN8a2yKn66WQLhLho9gpPtFsuTXMPg");
+    let inp_value = 1927496;
+    let inp_vout = 0;
+    let inp_txid = String::from("dee1ed3f6c305e13004ca34ccc0dfc0bb7af10f647c4c880ad38a4a4b63ee5f5");
+    let inp_pub_script = String::from("76a914af379fcf3f457c464f50be456a49a6f22019c73088ac");
+    let refund_time = 1906254;
 
-    let inp_key_wif = String::from("cNktLpEhR2NqaiaFsFUuUSabDdtrnYYK45jjdfYmJNEFJnbqYBML");
-    let inp_value = 1063926;
-    let inp_vout = 1;
-    let inp_txid = String::from("9c6fb406aa90c2749b8fee229e13094ac3a32264cad4aa6658f2f3854ec8cff1");
-    let inp_pub_script = String::from("76a914e86c5a9fab55d60fde27ae842da8eab82a3b770788ac"); 
+    let mut rng = util::get_os_rng();
+    let secp = util::get_secp256k1_curve(); 
     let inp_key = PrivateKey::from_wif(&inp_key_wif)
         .unwrap();
     let inp_pk = PublicKey::from_private_key(&secp, &inp_key);
@@ -453,7 +454,7 @@ fn test_create_lock_tx() {
         String::from(inp_pk_hex), 
         inp_pub_script
     );
-    let tx = create_lock_transaction(alice_pk, pub_x, bob_pk, pub_ch, vec![inp.clone()], 100000, 500, 1906254)
+    let tx = create_lock_transaction(alice_pk, pub_x, bob_pk, pub_ch, vec![inp.clone()], 100000, 500, refund_time)
         .unwrap();
     let inp_script = deserialize_script(&inp.pub_script);
     let signed_tx = sign_p2pkh_transaction(tx, vec![inp_script], vec![inp_key], vec![inp_pk], &secp);
@@ -465,18 +466,18 @@ fn test_create_lock_tx() {
 
 #[test]
 fn test_redeem_from_lock_tx() {
+    let txid = String::from("3f11e68ec0798b3f550c99b232353f51ba9a2442c731580e521777c79c1829da");
+    let bob_sk_wif = String::from("cVzf65djFRbgYN6W4iwSn6Use2S7jQtGhsYYQTJxHnAPRowbNF5N");
+    let alice_sk_wif = String::from("cPpqNPQtBMh8GRcxD8e34UdergNbNFVFbETcRyt1wn57r8VsS8VV");
+    let x_wif = String::from("cT3iDo6QMVkNhwXLjdWBgVJhPjUMG1At7uoBRKeuHT2qoSY7wteq");
+    let inp_pub_script = String::from("a914c705426ecd4b427caefd4530d6f78c732b40956b87");
+    let vout = 0;
+    let refund_time = 1906254;
+    let inp_value = 100000;
+    let fee = 500;
+    
     let mut rng = util::get_os_rng();
     let secp = util::get_secp256k1_curve();
-
-    let txid = String::from("0541c47eefc6ea2eca7e8e3429fcf1b1a2a5db6d8b545ddf1c1d0d7f71cb780d");
-    let vout = 0;
-    let refund_time = 1906706;
-    let bob_sk_wif = String::from("cViWkEetJvh9mZyKLGBLsg7L3N33aS5T51w13hm64JUqWnbxypRd");
-    let alice_sk_wif = String::from("cPsNfSZhVe9XhnsCzWkK8xW5GecmNfjoPrkuA8xv2XSmGcPstfcD");
-    let x_wif = String::from("cVY2yARFZaBQ747y4j9UdwFBHJQ4siZcrahiKXaVX4YapKXFhdQX");
-    let inp_value = 100000;
-    let inp_pub_script = String::from("a9141c9dddd2ab79dc09764b5700a12887f2d6d95eee87");
-    let fee = 500;
 
     let bob_sk = PrivateKey::from_wif(&bob_sk_wif)
         .unwrap();
@@ -491,7 +492,7 @@ fn test_redeem_from_lock_tx() {
 
     let inp = BTCInput::new(txid, vout, inp_value, alice_sk.to_wif(), PublicKey::from_private_key(&secp, &alice_sk).to_string(), inp_pub_script.clone());
 
-    let tx = create_spend_lock_transaction(&pub_recv, inp, inp_value, fee)
+    let tx = create_spend_lock_transaction(&pub_recv, inp, inp_value, fee, 0)
         .unwrap();
     let lock_script = get_lock_pub_script(
         PublicKey::from_private_key(&secp, &alice_sk), 
@@ -506,18 +507,17 @@ fn test_redeem_from_lock_tx() {
 
 #[test]
 fn test_refund_from_lock_tx() {
-    let mut rng = util::get_os_rng();
-    let secp = util::get_secp256k1_curve();
-
-    let txid = String::from("9c6fb406aa90c2749b8fee229e13094ac3a32264cad4aa6658f2f3854ec8cff1");
+    let txid = String::from("3f11e68ec0798b3f550c99b232353f51ba9a2442c731580e521777c79c1829da");
+    let bob_sk_wif = String::from("cVzf65djFRbgYN6W4iwSn6Use2S7jQtGhsYYQTJxHnAPRowbNF5N");
+    let alice_sk_wif = String::from("cPpqNPQtBMh8GRcxD8e34UdergNbNFVFbETcRyt1wn57r8VsS8VV");
+    let x_wif = String::from("cT3iDo6QMVkNhwXLjdWBgVJhPjUMG1At7uoBRKeuHT2qoSY7wteq");
+    let inp_pub_script = String::from("a914c705426ecd4b427caefd4530d6f78c732b40956b87");
     let vout = 0;
     let refund_time : u32 = 1906254;
-    let bob_sk_wif = String::from("cSw9zXxhMj62abxLsr85AkoafazySQcQaASpu4r7LCByLCfcLYkY");
-    let alice_sk_wif = String::from("cQojWvqUvSpZsuwemQ3ed97JPRWBhTh2izkoSm39pSuUovbwzBxb");
-    let x_wif = String::from("cSpMwozozPVugemQ3VVFU2EZqKZxu4GnwG2GXHoj2pytE3jm4Z1g");
     let inp_value = 100000;
-    let inp_pub_script = String::from("a914de6656405302bea85edc1cb7ac254c8d3678f74e87");
     let fee = 500;
+    let mut rng = util::get_os_rng();
+    let secp = util::get_secp256k1_curve();
 
     let bob_sk = PrivateKey::from_wif(&bob_sk_wif)
         .unwrap();
@@ -532,14 +532,14 @@ fn test_refund_from_lock_tx() {
 
     let inp = BTCInput::new(txid, vout, inp_value, alice_sk.to_wif(), PublicKey::from_private_key(&secp, &alice_sk).to_string(), inp_pub_script.clone());
 
-    let tx = create_spend_lock_transaction(&pub_recv, inp, inp_value, fee)
+    let tx = create_spend_lock_transaction(&pub_recv, inp, inp_value, fee, refund_time)
         .unwrap();
     let lock_script = get_lock_pub_script(
         PublicKey::from_private_key(&secp, &alice_sk), 
         PublicKey::from_private_key(&secp, &x), 
         PublicKey::from_private_key(&secp, &bob_sk),
          refund_time.into(), false);
-    let signed_tx = sign_lock_transaction_refund(tx, 0, lock_script, bob_sk, refund_time, &secp);
+    let signed_tx = sign_lock_transaction_refund(tx, 0, lock_script, bob_sk, &secp);
     let ser_tx = serialize_btc_tx(&signed_tx);
     println!("{}", ser_tx);
 }
