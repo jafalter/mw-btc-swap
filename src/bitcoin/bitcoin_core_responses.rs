@@ -30,6 +30,13 @@ pub struct ListUnspentResponse {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct BlockCountResponse {
+    pub result : u64,
+    pub error : Option<Error>,
+    pub id : String
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct SendRawTxResponse {
     pub result : Option<String>,
     pub error : Option<Error>,
