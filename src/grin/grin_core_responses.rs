@@ -14,5 +14,33 @@ use serde::{Serialize, Deserialize};
 //}
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct GetTipResponseOk {
+pub struct JsonRPCResponse<T> {
+    pub id : String,
+    pub jsonrpc : String,
+    pub result : Option<T>,
+    pub error : Option<Error>
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Error {
+    pub code : u64,
+    pub message : String
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PushTransactionResult {
+    pub Ok : ()
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct GetTipResult {
+    pub Ok : GetTipResultOk
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct GetTipResultOk {
+    pub height : u64,
+    pub last_block_pushed : String,
+    pub prev_block_to_last : String,
+    pub total_difficulty : u64
 }
