@@ -26,7 +26,7 @@ impl ImportGrin {
 }
 
 impl Command for ImportGrin {
-    fn execute(&self, settings : &Settings, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, &'static str> {
+    fn execute(&self, settings : &Settings, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, String> {
         let mut slate : SwapSlate = read_slate_from_disk(self.swpid, &settings.slate_directory)
             .expect("Failed to read SwapSlate from file");
         slate.prv_slate.mw.inputs.push(MWCoin{

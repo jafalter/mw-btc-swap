@@ -23,14 +23,14 @@ pub struct Init {
     to : Currency,
     from_amount : u64,
     to_amount : u64,
-    timeout_btc : u32,
-    timeout_grin : u32
+    timeout_btc : u64,
+    timeout_grin : u64
 }
 
 impl Init {
-    pub fn new(from : Currency, to : Currency, from_amount : u64, to_amount : u64, timeout_minutes: u32) -> Init {
-        let timeout_grin : u32 = timeout_minutes / GRIN_BLOCK_TIME;
-        let timeout_btc : u32 = timeout_minutes / GRIN_BLOCK_TIME;
+    pub fn new(from : Currency, to : Currency, from_amount : u64, to_amount : u64, timeout_minutes: u64) -> Init {
+        let timeout_grin : u64 = timeout_minutes  / GRIN_BLOCK_TIME;
+        let timeout_btc : u64 = timeout_minutes / GRIN_BLOCK_TIME;
 
         Init {
             from : from,
@@ -44,7 +44,7 @@ impl Init {
 }
 
 impl Command for Init {
-    fn execute(&self, settings : &Settings, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, &'static str> {
+    fn execute(&self, settings : &Settings, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, String> {
         println!("Executing init command");
         let mut rng = rand::thread_rng();
 
@@ -98,7 +98,7 @@ impl Command for Init {
             })
         }
         else {
-            Err("Swapped currency setup not supported")
+            Err(String::from("Swapped currency setup not supported"))
         }
     }
 }

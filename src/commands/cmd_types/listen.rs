@@ -1,4 +1,4 @@
-use crate::swap::protocol::setup_phase_swap_mw;
+use crate::{bitcoin::bitcoin_core::BitcoinCore, grin::grin_core::GrinCore, net::http::RequestFactory, swap::protocol::setup_phase_swap_mw};
 use crate::swap::protocol::setup_phase_swap_btc;
 use crate::net::tcp::write_to_stream;
 use crate::swap::slate::get_slate_checksum;
@@ -28,7 +28,7 @@ impl Listen {
 }
 
 impl Command for Listen {
-    fn execute(&self, settings : &Settings, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, &'static str> {
+    fn execute(&self, settings : &Settings, rng : &mut OsRng, secp : &Secp256k1<All>) -> Result<SwapSlate, String> {
 
         let mut swp_slate = read_slate_from_disk(self.swapid, &settings.slate_directory)
             .expect("Failed to read SwapSlate from file");
@@ -50,13 +50,15 @@ impl Command for Listen {
             }
         }
         if value < from_amount {
-            Err("Not enough value in inputs, please import more Coins")
+            Err(String::from("Not enough value in inputs, please import more Coins"))
         }
         else {    
             // Start TCP server
             let tcpaddr : String = format!("{}:{}", settings.tcp_addr, settings.tcp_port);
             println!("Starting TCP Listener on {}", tcpaddr);
             println!("Please share {}.pub.json with a interested peer. Never share your private file", self.swapid);
+            let btc_core = BitcoinCore::new(settings.btc.clone(), RequestFactory::new(None));
+            let grin_core = GrinCore::new(settings.grin.clone(), RequestFactory::new(None));
             let listener = TcpListener::bind(tcpaddr).unwrap(); 
             for client in listener.incoming() {
                 println!("A client connected");
@@ -71,12 +73,10 @@ impl Command for Listen {
                     // Send back OK message
                     write_to_stream(&mut stream, &String::from("OK"));
                     if swp_slate.pub_slate.btc.swap_type == SwapType::OFFERED {
-                        setup_phase_swap_btc(&mut swp_slate, &mut stream, rng, &curve)
-                            .expect("Setup phase (btc) failed");
+                        setup_phase_swap_btc(&mut swp_slate, &mut stream, rng, &secp, &grin_core, &btc_core)?;
                     }
                     else {
-                        setup_phase_swap_mw(&mut swp_slate, &mut stream, rng, &curve)
-                            .expect("Setup phase (mw) failed");
+                        setup_phase_swap_mw(&mut swp_slate, &mut stream, rng, &secp, &grin_core, &btc_core)?;
                     }
                 }
                 else {
@@ -84,7 +84,7 @@ impl Command for Listen {
                     write_to_stream(&mut stream, &String::from("FAULT"));
                 }
             };
-            Err("Not implemented")
+            Err(String::from("Not implemented"))
         }
     } 
 }

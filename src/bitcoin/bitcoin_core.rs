@@ -9,7 +9,7 @@ use bitcoin::util::address::Address;
 use bitcoin::util::psbt::serialize::Serialize;
 use bitcoin::Transaction;
 
-use super::bitcoin_core_responses::BlockCountResponse;
+use super::bitcoin_core_responses::{BlockCountResponse, JsonRpcResponse};
 
 pub struct BitcoinCore {
     settings : BtcNodeSettings,
@@ -64,17 +64,36 @@ impl BitcoinCore {
     }
 
     /// Import a new address into the node to be able to check its balance
-    /// Call to this method takes very long as it triggers a rescan therefore we expect it to timeout
+    /// Note that we call the RPC method with rescan = false that means it will
+    /// only pick up balances coming from transactions in future blocks
     /// 
     /// # Arguments
     /// 
     /// * `addr` the address to index
-    pub fn import_btc_address(&self, addr : Address) {
-        let rpc = JsonRpc::new(String::from("1.0"), self.settings.id.clone(), String::from("importaddress"), format!("{}", addr.to_string()));
+    pub fn import_btc_address(&self, addr : Address) -> Result<(), String> {
+        let params : String = format!(r#"["{}","",false]"#, addr.to_string());
+        let rpc = JsonRpc::new(String::from("1.0"), self.settings.id.clone(), String::from("importaddress"), params);
         let url = format!("http://{}:{}", self.settings.url, self.settings.port);
         let req = self.req_factory.new_json_rpc_request(url, rpc, self.settings.user.clone(), self.settings.pass.clone());
         match req.execute() {
-            _ => ()
+            Ok(x) => {
+                let parsed : JsonRpcResponse<()> = serde_json::from_str(&x.content)
+                    .expect("Failed to parse import_btc_address response");
+                if parsed.id != self.settings.id {
+                    Err("RPC Request and Response id didn't match".to_string())
+                }
+                else {
+                    if parsed.error.is_some() {
+                        Err(parsed.error.unwrap().message)
+                    }
+                    else {
+                        Ok(())
+                    }
+                }
+            }
+            Err(e) => {
+                Err(e.to_string())
+            }
         }
     }
 
@@ -190,7 +209,9 @@ impl BitcoinCore {
 
 #[cfg(test)]
 mod test {
-use crate::bitcoin::btcroutines::create_private_key;
+use bitcoin::Address;
+
+    use crate::bitcoin::btcroutines::create_private_key;
 use crate::bitcoin::bitcoin_core::BTC_CORE_RPC_TYPES;
 use crate::bitcoin::bitcoin_core::BitcoinCore;
 use crate::bitcoin::bitcoin_types::BTCInput;
@@ -199,7 +220,7 @@ use crate::Settings;
 use crate::settings::BtcNodeSettings;
 use crate::net::http::HttpResponse;
 use crate::util;
-use std::fs;
+use std::{fs, str::FromStr};
 use crate::bitcoin::bitcoin_core_responses::SendRawTxResponse;
 use crate::bitcoin::bitcoin_core_responses::Error;
 use crate::bitcoin::btcroutines::create_lock_transaction;
@@ -426,5 +447,17 @@ use crate::bitcoin::btcroutines::create_lock_transaction;
         let core = BitcoinCore::new(get_btc_core_settings(), factory);
         let count = core.get_current_block_height().unwrap();
         assert_eq!(1906786, count);
+    }
+
+    #[test]
+    fn test_import_address() {
+        let stub_response = HttpResponse {
+            status : 200,
+            content : String::from(r#"{"result":null,"error":null,"id":"resttest"}"#)
+        };
+        let factory = RequestFactory::new(Some(stub_response));
+        let core = BitcoinCore::new(get_btc_core_settings(), factory);
+        let addr = Address::from_str(&String::from("myBqUUBtJ1H3cZtczAo9t6VT4yEXQaMSnU")).unwrap();
+        core.import_btc_address(addr).unwrap();
     }
 }

@@ -6,6 +6,12 @@ pub struct NetworkInfo {
     pub error : Option<Error>,
     pub id : String
 }
+#[derive(Serialize, Deserialize, Debug)]
+pub struct JsonRpcResponse<T> {
+    pub result : Option<T>,
+    pub error : Option<Error>,
+    pub id : String
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct NetworkInfoResult {

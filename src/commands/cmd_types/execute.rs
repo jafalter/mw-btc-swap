@@ -1,4 +1,4 @@
-use crate::swap::slate::get_slate_checksum;
+use crate::{bitcoin::bitcoin_core::BitcoinCore, grin::grin_core::GrinCore, net::http::RequestFactory, swap::slate::get_slate_checksum};
 use crate::swap::slate::read_slate_from_disk;
 use rand::rngs::OsRng;
 use bitcoin::secp256k1::Secp256k1;
@@ -28,11 +28,13 @@ impl Execute {
 }
 
 impl Command for Execute {
-    fn execute(&self, settings : &Settings, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, &'static str> {
+    fn execute(&self, settings : &Settings, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, String> {
         let mut slate : SwapSlate = read_slate_from_disk(self.swapid, &settings.slate_directory)
             .expect("Unable to read slate files from disk");
         let mut stream : TcpStream = TcpStream::connect(format!("{}:{}", slate.pub_slate.meta.server, slate.pub_slate.meta.port))
             .expect("Failed to connect to peer via TCP");
+        let btc_core = BitcoinCore::new(settings.btc.clone(), RequestFactory::new(None));
+        let grin_core = GrinCore::new(settings.grin.clone(), RequestFactory::new(None));
         // first message exchanged is a hash of the pub slate file
         println!("Connected to peer");
         let checksum = get_slate_checksum(slate.id, &settings.slate_directory).unwrap();
@@ -41,18 +43,20 @@ impl Command for Execute {
         if resp.eq_ignore_ascii_case("OK") == false {
             stream.shutdown(Shutdown::Both)
                 .expect("Failed to shutdown stream");
-            Err("Checksums didn't match cancelled swap")
+            Err(String::from("Checksums didn't match cancelled swap"))
         }
         else {
             if slate.pub_slate.btc.swap_type == SwapType::OFFERED {
                 // Offered value is btc, requested is grin
-                setup_phase_swap_mw(&mut slate, &mut stream, rng, &curve).expect("Setup phase failed");
-                Err("Not implemented")
+                setup_phase_swap_mw(&mut slate, &mut stream, rng, &curve, &grin_core, &btc_core)
+                    .expect("Setup phase failed");
+                Err(String::from("Not implemented"))
             }
             else {
                 // Offerec value is grin, requested is btc
-                setup_phase_swap_btc(&mut slate, &mut stream, rng, &curve).expect("Setup phase failed");
-                Err("Not implemented")
+                setup_phase_swap_btc(&mut slate, &mut stream, rng, &curve, &grin_core, &btc_core)
+                    .expect("Setup phase failed");
+                Err(String::from("Not implemented"))
             }
         }
     }

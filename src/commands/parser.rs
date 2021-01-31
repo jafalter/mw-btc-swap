@@ -32,7 +32,7 @@ pub fn parse_arguments(matches: ArgMatches) -> Result<Box<dyn Command>, &'static
         let to_currency = parse_currency_from_string(to_currency_arg);
         let from_amount : u64 = from_amount_arg.parse::<u64>().unwrap();
         let to_amount : u64 = to_amount_arg.parse::<u64>().unwrap();
-        let timeout_min : u32 = timeout_arg.parse::<u32>().unwrap();
+        let timeout_min : u64 = timeout_arg.parse::<u64>().unwrap();
 
         // Validate arguments
         let from_overflow = ( from_currency == Currency::BTC && from_amount > constants::BTC_MAX_SATS ) || ( from_currency == Currency::GRIN && from_amount > constants::GRIN_MAX_NANOGRIN );

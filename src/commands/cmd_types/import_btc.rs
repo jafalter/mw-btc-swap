@@ -32,7 +32,7 @@ impl ImportBtc {
 }
 
 impl Command for ImportBtc {
-    fn execute(&self, settings: &Settings, rng : &mut OsRng, secp : &Secp256k1<All>) -> Result<SwapSlate, &'static str> {
+    fn execute(&self, settings: &Settings, rng : &mut OsRng, secp : &Secp256k1<All>) -> Result<SwapSlate, String> {
         let mut slate : SwapSlate = read_slate_from_disk(self.swpid, &settings.slate_directory)
             .expect("Failed to read SwapSlate");
         let sec_key = PrivateKey::from_wif(&self.sk)

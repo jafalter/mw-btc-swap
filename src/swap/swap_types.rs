@@ -34,7 +34,7 @@ pub struct Meta {
 #[derive(Serialize, Deserialize)]
 pub struct MWPub {
     pub amount : u64,
-    pub timelock : u32,
+    pub timelock : u64,
     pub swap_type : SwapType
 }
 
@@ -47,7 +47,7 @@ pub struct MWPriv {
 #[derive(Serialize, Deserialize)]
 pub struct BTCPub {
     pub amount : u64,
-    pub timelock : u32,
+    pub timelock : u64,
     pub swap_type : SwapType,
     pub stmt : Option<String>
 }
