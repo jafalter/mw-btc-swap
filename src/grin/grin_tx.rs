@@ -11,20 +11,20 @@ pub struct GrinTx {
 }
 
 pub struct DBuildMWTxResult {
-    tx: Slate,
-    coin: MWCoin,
+    pub tx: Slate,
+    pub coin: MWCoin,
 }
 
 pub struct DSharedOutMwTxResult {
-    tx: Slate,
-    change_coin: Option<MWCoin>,
-    shared_coin: MWCoin,
+    pub tx: Slate,
+    pub change_coin: Option<MWCoin>,
+    pub shared_coin: MWCoin,
 }
 
 pub struct ContractMwResult {
-    tx : Slate,
-    coin : MWCoin,
-    x : SecretKey
+    pub tx : Slate,
+    pub coin : MWCoin,
+    pub x : SecretKey
 }
 
 impl GrinTx {

@@ -1,4 +1,4 @@
-use crate::{bitcoin::bitcoin_core::BitcoinCore, grin::grin_core::GrinCore, net::http::RequestFactory, swap::protocol::setup_phase_swap_mw};
+use crate::{bitcoin::bitcoin_core::BitcoinCore, grin::{grin_core::GrinCore, grin_tx::GrinTx}, net::http::RequestFactory, swap::protocol::setup_phase_swap_mw};
 use crate::swap::protocol::setup_phase_swap_btc;
 use crate::net::tcp::write_to_stream;
 use crate::swap::slate::get_slate_checksum;
@@ -59,6 +59,7 @@ impl Command for Listen {
             println!("Please share {}.pub.json with a interested peer. Never share your private file", self.swapid);
             let btc_core = BitcoinCore::new(settings.btc.clone(), RequestFactory::new(None));
             let grin_core = GrinCore::new(settings.grin.clone(), RequestFactory::new(None));
+            let grin_tx = GrinTx::new(settings.grin.clone(), RequestFactory::new(None));
             let listener = TcpListener::bind(tcpaddr).unwrap(); 
             for client in listener.incoming() {
                 println!("A client connected");
@@ -73,10 +74,10 @@ impl Command for Listen {
                     // Send back OK message
                     write_to_stream(&mut stream, &String::from("OK"));
                     if swp_slate.pub_slate.btc.swap_type == SwapType::OFFERED {
-                        setup_phase_swap_btc(&mut swp_slate, &mut stream, rng, &secp, &grin_core, &btc_core)?;
+                        setup_phase_swap_btc(&mut swp_slate, &mut stream, rng, &secp, &grin_core, &btc_core, &grin_tx)?;
                     }
                     else {
-                        setup_phase_swap_mw(&mut swp_slate, &mut stream, rng, &secp, &grin_core, &btc_core)?;
+                        setup_phase_swap_mw(&mut swp_slate, &mut stream, rng, &secp, &grin_core, &btc_core, &grin_tx)?;
                     }
                 }
                 else {

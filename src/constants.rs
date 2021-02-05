@@ -20,3 +20,5 @@ pub const FFFFFFFF : u32 = 4294967295;
 pub const SIGHASH_ALL : u8 = 0x01;
 // Standard fee we use on the Bitcoin transactions
 pub const BTC_FEE : u64 = 500;
+// Max attempts of verifing locked funds;
+pub const MAX_ATTEMPTS_VERF_FUNDS : u64 = 120;

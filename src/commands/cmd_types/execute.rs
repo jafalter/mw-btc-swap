@@ -1,4 +1,4 @@
-use crate::{bitcoin::bitcoin_core::BitcoinCore, grin::grin_core::GrinCore, net::http::RequestFactory, swap::slate::get_slate_checksum};
+use crate::{bitcoin::bitcoin_core::BitcoinCore, grin::{grin_core::GrinCore, grin_tx::GrinTx}, net::http::RequestFactory, swap::slate::get_slate_checksum};
 use crate::swap::slate::read_slate_from_disk;
 use rand::rngs::OsRng;
 use bitcoin::secp256k1::Secp256k1;
@@ -35,6 +35,7 @@ impl Command for Execute {
             .expect("Failed to connect to peer via TCP");
         let btc_core = BitcoinCore::new(settings.btc.clone(), RequestFactory::new(None));
         let grin_core = GrinCore::new(settings.grin.clone(), RequestFactory::new(None));
+        let grin_tx = GrinTx::new(settings.grin.cllone(), RequestFactory::new(None));
         // first message exchanged is a hash of the pub slate file
         println!("Connected to peer");
         let checksum = get_slate_checksum(slate.id, &settings.slate_directory).unwrap();
@@ -48,13 +49,13 @@ impl Command for Execute {
         else {
             if slate.pub_slate.btc.swap_type == SwapType::OFFERED {
                 // Offered value is btc, requested is grin
-                setup_phase_swap_mw(&mut slate, &mut stream, rng, &curve, &grin_core, &btc_core)
+                setup_phase_swap_mw(&mut slate, &mut stream, rng, &curve, &grin_core, &btc_core, &grin_tx)
                     .expect("Setup phase failed");
                 Err(String::from("Not implemented"))
             }
             else {
                 // Offerec value is grin, requested is btc
-                setup_phase_swap_btc(&mut slate, &mut stream, rng, &curve, &grin_core, &btc_core)
+                setup_phase_swap_btc(&mut slate, &mut stream, rng, &curve, &grin_core, &btc_core, &grin_tx)
                     .expect("Setup phase failed");
                 Err(String::from("Not implemented"))
             }
