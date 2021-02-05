@@ -1,4 +1,4 @@
-use crate::bitcoin::btcroutines::create_private_key;
+use crate::bitcoin::btcroutines::{create_private_key, serialize_priv_key, serialize_pub_key};
 use crate::net::tcp::write_to_stream;
 use crate::SwapSlate;
 use crate::{
@@ -28,30 +28,34 @@ pub fn setup_phase_swap_mw(
     stream: &mut TcpStream,
     rng: &mut OsRng,
     secp: &Secp256k1<All>,
-    grin_core: &GrinCore,
-    btc_core: &BitcoinCore,
-    grin_tx: &GrinTx,
-) -> Result<SwapSlate, &'static str> {
+    grin_core: &mut GrinCore,
+    btc_core: &mut BitcoinCore,
+    grin_tx: &mut GrinTx,
+) -> Result<(), &'static str> {
     println!("Starting setup phase MW");
     let mut msg_bob = "".to_string();
 
     // Receiver Bitcoin keypair
     let sk_a = create_private_key(rng);
     let pub_a = sk_a.public_key(secp);
+    slate.prv_slate.btc.sk = Some(serialize_priv_key(&sk_a));
+    slate.pub_slate.btc.pub_a = Some(serialize_pub_key(&pub_a));
 
     // Send public key to peer
     write_to_stream(stream, &hex::encode(pub_a.serialize()));
 
-    // Senders pubkey
+    // Bobs pubkey
     msg_bob = read_from_stream(stream);
     let pub_b =
         PublicKey::from_slice(&hex::decode(msg_bob).expect("Failed to decode senders pubkey"))
             .expect("Failed to deserialize senders pubkey");
+    slate.pub_slate.btc.pub_b = Some(serialize_pub_key(&pub_b));
 
     // Statement x
     msg_bob = read_from_stream(stream);
     let pub_x = PublicKey::from_slice(&hex::decode(msg_bob).expect("Failed to decode statement X"))
         .expect("Failed to deserialize statement X");
+    slate.pub_slate.btc.pub_x = Some(serialize_pub_key(&pub_x));
 
     // Bitcoin lock height
     msg_bob = read_from_stream(stream);
@@ -97,21 +101,27 @@ pub fn setup_phase_swap_mw(
 
             // Create shared MW output
             let shared_out_result = grin_tx.dshared_out_mw_tx_alice(
-                slate.prv_slate.mw.inputs,
+                slate.prv_slate.mw.inputs.clone(),
                 slate.pub_slate.mw.amount,
                 0,
                 stream,
             ).expect("Failed to run shared out protocol on Alice side");
+            slate.prv_slate.mw.shared_coin = Some(shared_out_result.shared_coin.clone());
 
             // Timelocked transaction spending back to Alice
             let refund_result = grin_tx.dshared_inp_mw_tx_alice(
-                shared_out_result.shared_coin, 
-                shared_out_result.shared_coin.value, 
+                shared_out_result.shared_coin.clone(), 
+                shared_out_result.shared_coin.clone().value, 
                 grin_lock_height, 
                 stream).expect("Failed to run shared inp protocol on Alice side");
 
-            // Spend shared MW output with timelock
-            Err("Not implemented")
+            // publish the two transactions
+            grin_core.push_transaction(shared_out_result.tx.tx.unwrap())
+                .expect("Failed to publish MW funding transaction");
+            grin_core.push_transaction(refund_result.tx.tx.unwrap())
+                .expect("Failed to publish MW refund transaction");
+
+            Ok(())
         }
     }
 }
@@ -126,31 +136,37 @@ pub fn setup_phase_swap_btc(
     stream: &mut TcpStream,
     rng: &mut OsRng,
     secp: &Secp256k1<All>,
-    grin_core: &GrinCore,
-    btc_core: &BitcoinCore,
-    grin_tx: &GrinTx,
-) -> Result<SwapSlate, String> {
+    grin_core: &mut GrinCore,
+    btc_core: &mut BitcoinCore,
+    grin_tx: &mut GrinTx,
+) -> Result<(), String> {
     println!("Starting setup phase BTC");
     let mut msg_alice = "".to_string();
 
     // Sender Bitcoin keypair (for the change address)
     let sk_b = create_private_key(rng);
     let pub_b = sk_b.public_key(secp);
+    slate.pub_slate.btc.pub_b = Some(serialize_pub_key(&pub_b));
+    slate.prv_slate.btc.sk = Some(serialize_priv_key(&sk_b));
 
     // Sender refund address
     let sk_r = create_private_key(rng);
     let pub_r = sk_r.public_key(secp);
+    slate.prv_slate.btc.r_sk = Some(serialize_priv_key(&sk_r));
 
     // witness / statement pair
     let x = create_private_key(rng);
     let pub_x = x.public_key(secp);
+    slate.prv_slate.btc.x = Some(serialize_priv_key(&x));
+    slate.pub_slate.btc.pub_x = Some(serialize_pub_key(&pub_x));
 
     // get the receivers pub key
     msg_alice = read_from_stream(stream);
     let pub_a = PublicKey::from_slice(&hex::decode(msg_alice).unwrap())
         .expect("Alice sent and invalid pubkey");
+    slate.pub_slate.btc.pub_a = Some(serialize_pub_key(&pub_a));
 
-    // Send sender pub key and statement
+    // Send sender pub key and statement pub_x
     write_to_stream(stream, &hex::encode(pub_b.serialize()));
     write_to_stream(stream, &hex::encode(pub_x.serialize()));
 
@@ -189,11 +205,12 @@ pub fn setup_phase_swap_btc(
 
     let shared_out_result = grin_tx.dshared_out_mw_tx_bob(slate.pub_slate.mw.amount, stream)
         .expect("Failed to run dsharedout protocol on Bob side");
+    slate.prv_slate.mw.shared_coin = Some(shared_out_result.shared_coin.clone());
     let shared_inp_result = grin_tx.dshared_inp_mw_tx_bob(
-        shared_out_result.shared_coin, 
-        shared_out_result.shared_coin.value, 
-        lock_height_grin, 
+        shared_out_result.shared_coin.clone(), 
+        shared_out_result.shared_coin.clone().value, 
+        u64::try_from(lock_height_grin).unwrap(), 
         stream).expect("Failed to run shared_inp protocol on Bobs side");
 
-    Err(String::from("Not implemented"))
+    Ok(())
 }

@@ -401,6 +401,45 @@ pub fn deserialize_btc_tx(str_tx : &String) -> Transaction {
         .unwrap()
 }
 
+/// Serialize a Bitcoin PrivateKey to a string
+/// Returns a bitcoin private key in wif format
+///
+/// # Arguments
+///
+/// * `sk` the secret key to be serialized
+pub fn serialize_priv_key(sk : &PrivateKey) -> String {
+    sk.to_wif()
+}
+
+/// Deserializes a Bitcoin PrivateKey from a string
+/// Returns a deserialized PrivateKey object
+///
+/// # Arguments
+///
+/// * `sk` Secretkey in wif format
+pub fn deserialize_priv_key(sk: &String) -> PrivateKey {
+    PrivateKey::from_wif(&sk).unwrap()
+}
+
+/// Serialize a Bitcoin PublicKey to a string
+/// Returns a bitcoin public key serialized to a string
+///
+/// # Arguments
+///
+/// * `pk` the public key to be serialized
+pub fn serialize_pub_key(pk : &PublicKey) -> String {
+    pk.to_string()
+}
+
+/// Deserialize a Bitcoin PublicKey from a string
+/// Returns a Bitcoin public key object
+///
+/// # Arguments
+///
+/// * `str` serialized Bitcoin public key
+pub fn deserialize_pub_key(str : &String) -> PublicKey {
+    PublicKey::from_str(str).unwrap()
+}
 
 #[test]
 fn test_script_serialization() {

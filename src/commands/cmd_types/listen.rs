@@ -57,9 +57,9 @@ impl Command for Listen {
             let tcpaddr : String = format!("{}:{}", settings.tcp_addr, settings.tcp_port);
             println!("Starting TCP Listener on {}", tcpaddr);
             println!("Please share {}.pub.json with a interested peer. Never share your private file", self.swapid);
-            let btc_core = BitcoinCore::new(settings.btc.clone(), RequestFactory::new(None));
-            let grin_core = GrinCore::new(settings.grin.clone(), RequestFactory::new(None));
-            let grin_tx = GrinTx::new(settings.grin.clone(), RequestFactory::new(None));
+            let mut btc_core = BitcoinCore::new(settings.btc.clone(), RequestFactory::new(None));
+            let mut grin_core = GrinCore::new(settings.grin.clone(), RequestFactory::new(None));
+            let mut grin_tx = GrinTx::new(settings.grin.clone(), RequestFactory::new(None));
             let listener = TcpListener::bind(tcpaddr).unwrap(); 
             for client in listener.incoming() {
                 println!("A client connected");
@@ -74,10 +74,10 @@ impl Command for Listen {
                     // Send back OK message
                     write_to_stream(&mut stream, &String::from("OK"));
                     if swp_slate.pub_slate.btc.swap_type == SwapType::OFFERED {
-                        setup_phase_swap_btc(&mut swp_slate, &mut stream, rng, &secp, &grin_core, &btc_core, &grin_tx)?;
+                        setup_phase_swap_btc(&mut swp_slate, &mut stream, rng, &secp, &mut grin_core, &mut btc_core, &mut grin_tx)?;
                     }
                     else {
-                        setup_phase_swap_mw(&mut swp_slate, &mut stream, rng, &secp, &grin_core, &btc_core, &grin_tx)?;
+                        setup_phase_swap_mw(&mut swp_slate, &mut stream, rng, &secp, &mut grin_core, &mut btc_core, &mut grin_tx)?;
                     }
                 }
                 else {

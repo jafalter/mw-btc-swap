@@ -3,7 +3,7 @@ use grin_util::secp::key::SecretKey;
 use grin_util::secp::pedersen::Commitment;
 use crate::grin::grin_routines::{*};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct MWCoin {
     pub commitment : String,
     pub blinding_factor: String,
@@ -24,14 +24,6 @@ impl MWCoin {
             commitment : enc_com,
             blinding_factor : enc_bf,
             value : value
-        }
-    }
-
-    pub fn clone(&self) -> Self {
-        MWCoin {
-            commitment : self.commitment.clone(),
-            blinding_factor : self.blinding_factor.clone(),
-            value : self.value
         }
     }
 }
