@@ -1,4 +1,4 @@
-use crate::bitcoin::btcroutines::{create_private_key, serialize_priv_key, serialize_pub_key};
+use crate::{bitcoin::btcroutines::{create_private_key, deserialize_priv_key, deserialize_pub_key, serialize_priv_key, serialize_pub_key}, grin::grin_routines::{deserialize_grin_pub_key, grin_pk_from_btc_pk, grin_sk_from_btc_sk}};
 use crate::net::tcp::write_to_stream;
 use crate::SwapSlate;
 use crate::{
@@ -14,6 +14,7 @@ use bitcoin::secp256k1::All;
 use bitcoin::util::key::PublicKey;
 use bitcoin::util::psbt::serialize::Serialize;
 use bitcoin::{secp256k1::Secp256k1, Address};
+use grin_util::secp::Secp256k1 as GrinSecp256k1;
 use rand::rngs::OsRng;
 use std::convert::TryFrom;
 use std::{net::TcpStream, thread, time::Duration};
@@ -203,14 +204,43 @@ pub fn setup_phase_swap_btc(
     msg_alice = read_from_stream(stream);
     let lock_height_grin = msg_alice.parse::<i64>().unwrap();
 
-    let shared_out_result = grin_tx.dshared_out_mw_tx_bob(slate.pub_slate.mw.amount, stream)
-        .expect("Failed to run dsharedout protocol on Bob side");
+    let shared_out_result = grin_tx.dshared_out_mw_tx_bob(slate.pub_slate.mw.amount, stream)?;
     slate.prv_slate.mw.shared_coin = Some(shared_out_result.shared_coin.clone());
     let shared_inp_result = grin_tx.dshared_inp_mw_tx_bob(
         shared_out_result.shared_coin.clone(), 
         shared_out_result.shared_coin.clone().value, 
         u64::try_from(lock_height_grin).unwrap(), 
-        stream).expect("Failed to run shared_inp protocol on Bobs side");
+        stream)?;
 
     Ok(())
+}
+
+pub fn exec_phase_swap_mw(
+    slate: &mut SwapSlate,
+    stream: &mut TcpStream,
+    btc_core: &mut BitcoinCore,
+    grin_tx: &mut GrinTx,
+    secp: &GrinSecp256k1,
+) -> Result<(), String> {
+    let shared_coin = slate.prv_slate.mw.shared_coin.clone().unwrap();
+    let pub_x = deserialize_pub_key(&slate.pub_slate.btc.pub_x.unwrap());
+    let pub_x_grin = grin_pk_from_btc_pk(&pub_x, secp);
+    let result = grin_tx.dcontract_mw_tx_alice(shared_coin, shared_coin.value, 0, pub_x_grin, stream)?;
+    
+    Err(String::from("Not implemented"))
+}
+
+pub fn exec_phase_swap_btc(
+    slate: &mut SwapSlate,
+    stream: &mut TcpStream,
+    btc_core: &mut BitcoinCore,
+    grin_tx: &mut GrinTx,
+    secp: &GrinSecp256k1,
+) -> Result<(), String> {
+    let shared_coin = slate.prv_slate.mw.shared_coin.clone().unwrap();
+    let x = deserialize_priv_key(&slate.prv_slate.btc.x.unwrap());
+    let x_grin = grin_sk_from_btc_sk(&x, secp);
+    grin_tx.dcontract_mw_tx_bob(shared_coin, shared_coin.value, 0, x_grin, stream)?;
+
+    Err(String::from("Not implemented"))
 }

@@ -10,6 +10,8 @@ use grin_util::secp::{
 use grin_wallet_libwallet::{Context, Slate};
 use rand::rngs::OsRng;
 use serde::{Serialize, Deserialize};
+use bitcoin::PublicKey as BTCPublicKey;
+use bitcoin::PrivateKey as BTCPrivKey;
 
 
 use crate::{bitcoin::btcroutines::create_private_key, constants::NANO_GRIN, util::get_os_rng};
@@ -53,8 +55,8 @@ impl MPBPContext {
 
     pub fn to_string(&mut self) -> String {
         let ser_obj = SerMPCtx {
-            t_1 : serialize_public_key(&self.t_1, &self.secp),
-            t_2 : serialize_public_key(&self.t_2, &self.secp),
+            t_1 : serialize_grin_public_key(&self.t_1, &self.secp),
+            t_2 : serialize_grin_public_key(&self.t_2, &self.secp),
             amount : self.amount,
             shared_nonce : serialize_secret_key(&self.shared_nonce),
             commit : serialize_commitment(&self.commit),
@@ -69,8 +71,8 @@ impl MPBPContext {
         let ser_obj : SerMPCtx = serde_json::from_str(str)
             .unwrap();
         MPBPContext {
-            t_1 : deserialize_pub_key(&ser_obj.t_1, &secp),
-            t_2 : deserialize_pub_key(&ser_obj.t_2, &secp),
+            t_1 : deserialize_grin_pub_key(&ser_obj.t_1, &secp),
+            t_2 : deserialize_grin_pub_key(&ser_obj.t_2, &secp),
             amount : ser_obj.amount,
             shared_nonce : deserialize_secret_key(&ser_obj.shared_nonce, &secp),
             tau_x : deserialize_secret_key(&ser_obj.tau_x, &secp),
@@ -190,7 +192,7 @@ pub fn serialize_commitment(com: &Commitment) -> String {
 ///
 /// * `pk` the public key to serialize
 /// * `secp` Secp256k1 engine
-pub fn serialize_public_key(pk: &PublicKey, secp: &Secp256k1) -> String {
+pub fn serialize_grin_public_key(pk: &PublicKey, secp: &Secp256k1) -> String {
     hex::encode(&PublicKey::serialize_vec(&pk, secp, true))
 }
 
@@ -200,7 +202,7 @@ pub fn serialize_public_key(pk: &PublicKey, secp: &Secp256k1) -> String {
 ///
 /// * `str` the string containing the hex encoded public key
 /// * `secp` the Secp256k1 engine
-pub fn deserialize_pub_key(str: &String, secp: &Secp256k1) -> PublicKey {
+pub fn deserialize_grin_pub_key(str: &String, secp: &Secp256k1) -> PublicKey {
     let pk_bytes = hex::decode(str)
         .unwrap();
     PublicKey::from_slice(secp, &pk_bytes)
@@ -299,6 +301,31 @@ pub fn mp_bullet_proof_r2(
     Ok(ctx)
 }
 
+/// Conversion from a bitcoin PublicKey to a grin one 
+/// Conversion is easy because they both use the same 
+/// curve and even same library
+///
+/// # Arguments
+///
+/// * `bpk` The bitcoin public key
+/// * `secp` Secp256k1 functions
+pub fn grin_pk_from_btc_pk(bpk : &BTCPublicKey, secp: &Secp256k1) -> PublicKey {
+    PublicKey::from_slice(secp, &bpk.to_bytes())
+        .unwrap()
+}
+
+/// Concersion from a bitcoin PrivateKey to a grin Secret Key
+/// Conversion is easy because they both use the same curve
+/// and even same library
+///
+/// # Arguments
+///
+/// * `sk` the bitcoin private key
+pub fn grin_sk_from_btc_sk(sk : &BTCPrivKey, secp: &Secp256k1) -> SecretKey {
+    SecretKey::from_slice(secp, &sk.to_bytes())
+        .unwrap()
+}
+
 /// The final proof creation algorithm callable be either one of the two parties to creat the final range proof
 ///
 /// # Arguments
@@ -338,7 +365,7 @@ mod test {
 
     use crate::util::get_os_rng;
 
-    use super::{MPBPContext, create_secret_key, deserialize_commitment, deserialize_pub_key, deserialize_secret_key, grin_to_nanogrin, mp_bullet_proof_fin, mp_bullet_proof_r1, mp_bullet_proof_r2, serialize_commitment, serialize_public_key, serialize_secret_key};
+    use super::{MPBPContext, create_secret_key, deserialize_commitment, deserialize_grin_pub_key, deserialize_secret_key, grin_to_nanogrin, mp_bullet_proof_fin, mp_bullet_proof_r1, mp_bullet_proof_r2, serialize_commitment, serialize_grin_public_key, serialize_secret_key};
 
     #[test]
     fn test_key_serializiation() {
@@ -357,8 +384,8 @@ mod test {
         let sk = create_secret_key(&mut rng, &secp);
         let pk = PublicKey::from_secret_key(&secp, &sk)
             .unwrap();
-        let ser = serialize_public_key(&pk, &secp);
-        let deser = deserialize_pub_key(&ser, &secp);
+        let ser = serialize_grin_public_key(&pk, &secp);
+        let deser = deserialize_grin_pub_key(&ser, &secp);
         assert_eq!(pk, deser);
     }
 
