@@ -1,4 +1,4 @@
-use crate::{bitcoin::btcroutines::{create_private_key, deserialize_priv_key, deserialize_pub_key, serialize_priv_key, serialize_pub_key}, grin::grin_routines::{deserialize_grin_pub_key, grin_pk_from_btc_pk, grin_sk_from_btc_sk}};
+use crate::{bitcoin::{bitcoin_types::BTCInput, btcroutines::{create_private_key, create_spend_lock_transaction, deserialize_priv_key, deserialize_pub_key, private_key_from_grin_sk, serialize_priv_key, serialize_pub_key, sign_lock_transaction_redeemer}}, grin::grin_routines::{deserialize_grin_pub_key, deserialize_secret_key, grin_pk_from_btc_pk, grin_sk_from_btc_sk}};
 use crate::net::tcp::write_to_stream;
 use crate::SwapSlate;
 use crate::{
@@ -10,7 +10,7 @@ use crate::{
     grin::{grin_core::GrinCore, grin_tx::GrinTx},
     net::tcp::read_from_stream,
 };
-use bitcoin::secp256k1::All;
+use bitcoin::{PrivateKey, secp256k1::All};
 use bitcoin::util::key::PublicKey;
 use bitcoin::util::psbt::serialize::Serialize;
 use bitcoin::{secp256k1::Secp256k1, Address};
@@ -61,6 +61,7 @@ pub fn setup_phase_swap_mw(
     // Bitcoin lock height
     msg_bob = read_from_stream(stream);
     let lock_time_btc: i64 = msg_bob.parse::<i64>().unwrap();
+    slate.pub_slate.btc.lock_time = Some(lock_time_btc);
     // We now calcualte the bitcoin address on which Bob is supposed to lock his BTC
     let pub_script = get_lock_pub_script(pub_a, pub_x, pub_b, lock_time_btc, true);
     let addr = Address::from_script(&pub_script, bitcoin::Network::Testnet).unwrap();
@@ -68,7 +69,8 @@ pub fn setup_phase_swap_mw(
     btc_core.import_btc_address(addr.clone()).unwrap();
 
     // Now wait for Bob to send the lock address himself and then verify the locked funds
-    msg_bob = read_from_stream(stream);
+    let address = read_from_stream(stream);
+    let txid = read_from_stream(stream);
     if addr.clone().to_string() != msg_bob {
         Err("Lock address sent by Bob doesn't match what we have calculated, stopping swap")
     } else {
@@ -95,8 +97,10 @@ pub fn setup_phase_swap_mw(
         if !verified_funds {
             Err("Faild to verify that btc funds are correctly locked")
         } else {
+            slate.pub_slate.btc.lock = Some(BTCInput::new2(txid, 0, slate.pub_slate.btc.amount, sk_a, pub_a, pub_script));
             let grin_height = grin_core.get_block_height().unwrap();
             let grin_lock_height = grin_height + slate.pub_slate.mw.timelock;
+            slate.pub_slate.mw.lock_time = Some(i64::try_from(grin_lock_height).unwrap());
             // Send over grin_lock_height to Bob
             write_to_stream(stream, &grin_lock_height.to_string());
 
@@ -115,6 +119,7 @@ pub fn setup_phase_swap_mw(
                 shared_out_result.shared_coin.clone().value, 
                 grin_lock_height, 
                 stream).expect("Failed to run shared inp protocol on Alice side");
+            slate.prv_slate.mw.refund_coin = Some(refund_result.coin);
 
             // publish the two transactions
             grin_core.push_transaction(shared_out_result.tx.tx.unwrap())
@@ -179,6 +184,7 @@ pub fn setup_phase_swap_btc(
         i64::try_from(btc_current_height + slate.pub_slate.btc.timelock).unwrap();
     // Send the bitcoin locktime to alice
     write_to_stream(stream, &btc_lock_height.to_string());
+    slate.pub_slate.btc.lock_time = Some(btc_lock_height);
 
     let tx_lock = create_lock_transaction(
         pub_a,
@@ -193,16 +199,19 @@ pub fn setup_phase_swap_btc(
     let pub_script = tx_lock.output.get(0).unwrap().script_pubkey.clone();
     let address = Address::from_script(&pub_script, bitcoin::Network::Testnet).unwrap();
 
+    let txid = tx_lock.clone().txid().to_string();
     btc_core
-        .send_raw_transaction(tx_lock)
-        .expect("Failed to send bitcoin lock transaction");
+        .send_raw_transaction(tx_lock)?;
 
-    // Send the address over to Alice and let her verify the locked funds
+    // Send the address, txid over to Alice and let her verify the locked funds
     write_to_stream(stream, &address.to_string());
+    write_to_stream(stream, &txid);
+    slate.pub_slate.btc.lock = Some(BTCInput::new2(txid, 0, btc_amount,  sk_b, pub_b, pub_script));
 
     // Receive the grin side lock height from alice
     msg_alice = read_from_stream(stream);
     let lock_height_grin = msg_alice.parse::<i64>().unwrap();
+    slate.pub_slate.mw.lock_time = Some(lock_height_grin);
 
     let shared_out_result = grin_tx.dshared_out_mw_tx_bob(slate.pub_slate.mw.amount, stream)?;
     slate.prv_slate.mw.shared_coin = Some(shared_out_result.shared_coin.clone());
@@ -219,28 +228,60 @@ pub fn exec_phase_swap_mw(
     slate: &mut SwapSlate,
     stream: &mut TcpStream,
     btc_core: &mut BitcoinCore,
+    rng: &mut OsRng,
     grin_tx: &mut GrinTx,
-    secp: &GrinSecp256k1,
+    grin_secp: &GrinSecp256k1,
+    btc_secp: &Secp256k1<All>,
 ) -> Result<(), String> {
     let shared_coin = slate.prv_slate.mw.shared_coin.clone().unwrap();
-    let pub_x = deserialize_pub_key(&slate.pub_slate.btc.pub_x.unwrap());
-    let pub_x_grin = grin_pk_from_btc_pk(&pub_x, secp);
-    let result = grin_tx.dcontract_mw_tx_alice(shared_coin, shared_coin.value, 0, pub_x_grin, stream)?;
+    let value = shared_coin.value;
+    let pub_x = deserialize_pub_key(&slate.pub_slate.btc.pub_x.clone().unwrap());
+    let pub_x_grin = grin_pk_from_btc_pk(&pub_x, grin_secp);
+    let result = grin_tx.dcontract_mw_tx_alice(shared_coin, value, 0, pub_x_grin, stream)?;
     
-    Err(String::from("Not implemented"))
+    let sk_a2 = create_private_key(rng);
+    let pub_a2 = PublicKey::from_private_key(btc_secp, &sk_a2);
+
+    let pub_a = deserialize_pub_key(&slate.pub_slate.btc.pub_a.clone().unwrap());
+    let pub_b = deserialize_pub_key(&slate.pub_slate.btc.pub_b.clone().unwrap());
+    let pub_x = deserialize_pub_key(&slate.pub_slate.btc.pub_x.clone().unwrap());
+
+    let x_btc = private_key_from_grin_sk(&result.x);
+
+    let sk_a = deserialize_priv_key(&slate.prv_slate.btc.sk.clone().unwrap());
+
+    // Now we can spent the Bitcoin
+    let redeem_tx = create_spend_lock_transaction(&pub_a2, slate.pub_slate.btc.lock.clone().unwrap(), slate.pub_slate.btc.amount, BTC_FEE, 0)?;
+    let lock_script = get_lock_pub_script(pub_a, pub_x, pub_b, slate.pub_slate.btc.lock_time.unwrap(), false);
+    let signed_redeem_tx = sign_lock_transaction_redeemer(redeem_tx, 0, lock_script, sk_a, x_btc, btc_secp);
+    let o = signed_redeem_tx.output.get(0).unwrap();
+    let txid = signed_redeem_tx.txid().to_string();
+    btc_core.send_raw_transaction(signed_redeem_tx.clone())?;
+    slate.prv_slate.btc.swapped = Some(BTCInput::new2(txid, 
+    0, 
+    o.value, 
+    sk_a2, 
+    pub_a2, 
+    o.script_pubkey.clone()));
+
+    Ok(())
 }
 
 pub fn exec_phase_swap_btc(
     slate: &mut SwapSlate,
     stream: &mut TcpStream,
     btc_core: &mut BitcoinCore,
+    grin_core: &mut GrinCore,
     grin_tx: &mut GrinTx,
     secp: &GrinSecp256k1,
 ) -> Result<(), String> {
     let shared_coin = slate.prv_slate.mw.shared_coin.clone().unwrap();
-    let x = deserialize_priv_key(&slate.prv_slate.btc.x.unwrap());
+    let value = shared_coin.value;
+    let x = deserialize_priv_key(&slate.prv_slate.btc.x.clone().unwrap());
     let x_grin = grin_sk_from_btc_sk(&x, secp);
-    grin_tx.dcontract_mw_tx_bob(shared_coin, shared_coin.value, 0, x_grin, stream)?;
+    let result = grin_tx.dcontract_mw_tx_bob(shared_coin, value, 0, x_grin, stream)?;
+    slate.prv_slate.mw.swapped_coin = Some(result.coin);
+    grin_core.push_transaction(result.tx.tx.unwrap())?;
 
-    Err(String::from("Not implemented"))
+    Ok(())
 }

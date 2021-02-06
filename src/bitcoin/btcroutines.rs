@@ -1,4 +1,4 @@
-use crate::{constants::SIGHASH_ALL, util};
+use crate::{constants::SIGHASH_ALL, grin::grin_tx::GrinTx, util};
 use bitcoin::{PubkeyHash, blockdata::opcodes::{self, all::{OP_ELSE, OP_ENDIF}}, consensus::encode::deserialize, consensus::encode::serialize_hex, secp256k1::Signature};
 use bitcoin::blockdata::opcodes::all::OP_CSV;
 use bitcoin::blockdata::opcodes::all::OP_CLTV;
@@ -8,7 +8,6 @@ use bitcoin::blockdata::script::Builder;
 use bitcoin::Transaction;
 use bitcoin::TxOut;
 use opcodes::{OP_FALSE, OP_TRUE, all::{OP_CHECKMULTISIG, OP_CHECKMULTISIGVERIFY, OP_CHECKSIG, OP_CHECKSIGVERIFY}};
-use serde_json::to_vec;
 use crate::constants::FFFFFFFF;
 use bitcoin::Script;
 use bitcoin::OutPoint;
@@ -27,6 +26,7 @@ use crate::constants::TEST_NET;
 use bitcoin::network::constants::Network;
 use bitcoin::hashes::sha256d::Hash;
 use std::str::FromStr;
+use grin_util::secp::SecretKey as GrinSecretKey;
 
 /// Creates a new secp256k1 private key used in bitcoin
 /// 
@@ -439,6 +439,21 @@ pub fn serialize_pub_key(pk : &PublicKey) -> String {
 /// * `str` serialized Bitcoin public key
 pub fn deserialize_pub_key(str : &String) -> PublicKey {
     PublicKey::from_str(str).unwrap()
+}
+
+/// Convert from a Grin SecretKey to a Bitcoin PrivateKey
+/// Conversion is easy because they use the same elliptic curve
+///
+/// # Arguments
+///
+/// * `sk` the grin Secretkey
+pub fn private_key_from_grin_sk(sk : &GrinSecretKey) -> PrivateKey {
+    let btc_sk = SecretKey::from_slice(&sk.0).unwrap();
+    PrivateKey {
+        compressed : true,
+        network : Network::Testnet,
+        key : btc_sk
+    }
 }
 
 #[test]

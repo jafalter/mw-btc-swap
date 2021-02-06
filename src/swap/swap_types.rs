@@ -36,6 +36,7 @@ pub struct Meta {
 pub struct MWPub {
     pub amount : u64,
     pub timelock : u64,
+    pub lock_time : Option<i64>,
     pub swap_type : SwapType
 }
 
@@ -43,7 +44,9 @@ pub struct MWPub {
 pub struct MWPriv {
     pub inputs : Vec<MWCoin>,
     pub partial_key : u64,
-    pub shared_coin : Option<MWCoin>
+    pub shared_coin : Option<MWCoin>,
+    pub refund_coin : Option<MWCoin>,
+    pub swapped_coin : Option<MWCoin>
 }
 
 #[derive(Serialize, Deserialize)]
@@ -51,9 +54,11 @@ pub struct BTCPub {
     pub amount : u64,
     pub timelock : u64,
     pub swap_type : SwapType,
+    pub lock_time : Option<i64>,
     pub pub_a : Option<String>,
     pub pub_b : Option<String>,
-    pub pub_x : Option<String>
+    pub pub_x : Option<String>,
+    pub lock : Option<BTCInput>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -62,5 +67,6 @@ pub struct BTCPriv {
     pub witness : u64,
     pub sk : Option<String>,
     pub x : Option<String>,
-    pub r_sk : Option<String>
+    pub r_sk : Option<String>,
+    pub swapped : Option<BTCInput>
 }

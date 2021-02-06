@@ -56,14 +56,17 @@ impl Command for Init {
             let mwpriv = MWPriv{
                 inputs : Vec::new(),
                 partial_key : 0,
-                shared_coin : None
+                shared_coin : None,
+                refund_coin : None,
+                swapped_coin : None
             };        
             let btcpriv = BTCPriv{
                 inputs : Vec::new(),
                 witness : 0,
                 sk : None,
                 x : None,
-                r_sk : None
+                r_sk : None,
+                swapped : None
             };
             let prv_slate = SwapSlatePriv{
                 mw : mwpriv,
@@ -77,14 +80,17 @@ impl Command for Init {
             let btcpub = BTCPub {
                 amount : btc_amount,
                 timelock : self.timeout_btc,
+                lock_time : None,
                 swap_type : if self.from == Currency::BTC { SwapType::OFFERED } else { SwapType::REQUESTED },
                 pub_a : None,
                 pub_b : None,
-                pub_x : None
+                pub_x : None,
+                lock : None
             };
             let mwpub = MWPub {
                 amount : mw_amount,
                 timelock : self.timeout_grin,
+                lock_time : None,
                 swap_type : if self.from == Currency::GRIN { SwapType::OFFERED } else { SwapType::REQUESTED }
             };
             let meta = Meta {
