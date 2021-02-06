@@ -19,6 +19,7 @@ use clap::{
 };
 
 use settings::Settings;
+use grin_util::secp::{ContextFlag, Secp256k1 as GrinSecp256k1};
 
 fn usage() {
     println!("usage: init|offer|accept|redeem options");
@@ -54,8 +55,9 @@ fn main() {
     // Initilize RNG
     let mut rng = util::get_os_rng();
     // Initialize curve
-    let curve = util::get_secp256k1_curve();
-    
+    let btc_secp = util::get_secp256k1_curve();
+    let grin_secp = GrinSecp256k1::with_caps(ContextFlag::Commit);
+
     let matches = App::new("Grin Bitcoin Swaps")
                         .version("1.0")
                         .author("Jakob Abfalter <jakobabfalter@gmail.com>")
@@ -174,7 +176,7 @@ fn main() {
     else {
         let cmd = commands::parser::parse_arguments(matches)
             .expect("Failed to parse command line arguments");
-        let slate : SwapSlate = cmd.execute(&settings, &mut rng, &curve)
+        let slate : SwapSlate = cmd.execute(&settings, &mut rng, &btc_secp, &grin_secp)
             .expect("Command execution failed");
         
         swap::slate::write_slate_to_disk(&slate, &settings.slate_directory, true, true);

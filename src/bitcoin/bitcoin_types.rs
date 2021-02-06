@@ -36,4 +36,8 @@ impl BTCInput {
             pub_script : serialize_script(&pub_script)
         }
     }
+
+    pub fn to_string(&self) -> String {
+        format!("txid: {}, vout: {}, value: {}, sk : {}, pk : {}, pubScript: {}", self.txid, self.vout, self.value, self.secret, self.pub_key, self.pub_script)
+    }
 }

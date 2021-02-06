@@ -45,8 +45,9 @@ pub struct MWPriv {
     pub inputs : Vec<MWCoin>,
     pub partial_key : u64,
     pub shared_coin : Option<MWCoin>,
+    pub change_coin : Option<MWCoin>,
     pub refund_coin : Option<MWCoin>,
-    pub swapped_coin : Option<MWCoin>
+    pub swapped_coin : Option<MWCoin>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -68,5 +69,6 @@ pub struct BTCPriv {
     pub sk : Option<String>,
     pub x : Option<String>,
     pub r_sk : Option<String>,
+    pub change : Option<BTCInput>,
     pub swapped : Option<BTCInput>
 }

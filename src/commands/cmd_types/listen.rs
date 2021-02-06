@@ -1,4 +1,4 @@
-use crate::{bitcoin::bitcoin_core::BitcoinCore, grin::{grin_core::GrinCore, grin_tx::GrinTx}, net::http::RequestFactory, swap::protocol::setup_phase_swap_mw};
+use crate::{bitcoin::bitcoin_core::BitcoinCore, grin::{grin_core::GrinCore, grin_tx::GrinTx}, net::http::RequestFactory, swap::{protocol::setup_phase_swap_mw, slate}};
 use crate::swap::protocol::setup_phase_swap_btc;
 use crate::net::tcp::write_to_stream;
 use crate::swap::slate::get_slate_checksum;
@@ -12,6 +12,7 @@ use crate::Settings;
 use crate::enums::SwapType;
 use crate::enums::Currency;
 use std::net::{TcpListener, TcpStream};
+use grin_util::secp::Secp256k1 as GrinSecp256k1;
 
 use crate::commands::cmd_types::command::Command;
 
@@ -28,7 +29,7 @@ impl Listen {
 }
 
 impl Command for Listen {
-    fn execute(&self, settings : &Settings, rng : &mut OsRng, secp : &Secp256k1<All>) -> Result<SwapSlate, String> {
+    fn execute(&self, settings : &Settings, rng : &mut OsRng, btc_secp : &Secp256k1<All>, grin_secp : &GrinSecp256k1) -> Result<SwapSlate, String> {
 
         let mut swp_slate = read_slate_from_disk(self.swapid, &settings.slate_directory)
             .expect("Failed to read SwapSlate from file");
@@ -74,10 +75,14 @@ impl Command for Listen {
                     // Send back OK message
                     write_to_stream(&mut stream, &String::from("OK"));
                     if swp_slate.pub_slate.btc.swap_type == SwapType::OFFERED {
-                        setup_phase_swap_btc(&mut swp_slate, &mut stream, rng, &secp, &mut grin_core, &mut btc_core, &mut grin_tx)?;
+                        setup_phase_swap_btc(&mut swp_slate, &mut stream, rng, &btc_secp, &mut grin_core, &mut btc_core, &mut grin_tx)?;
+                        setup_phase_swap_btc(&mut swp_slate, &mut stream, rng, btc_secp, &mut grin_core, &mut btc_core, &mut grin_tx)?;
+                        break;
                     }
                     else {
-                        setup_phase_swap_mw(&mut swp_slate, &mut stream, rng, &secp, &mut grin_core, &mut btc_core, &mut grin_tx)?;
+                        setup_phase_swap_mw(&mut swp_slate, &mut stream, rng, &btc_secp, &mut grin_core, &mut btc_core, &mut grin_tx)?;
+                        setup_phase_swap_btc(&mut swp_slate, &mut stream, rng, btc_secp, &mut grin_core, &mut btc_core, &mut grin_tx)?;
+                        break;
                     }
                 }
                 else {
@@ -85,7 +90,7 @@ impl Command for Listen {
                     write_to_stream(&mut stream, &String::from("FAULT"));
                 }
             };
-            Err(String::from("Not implemented"))
+            Ok(swp_slate)
         }
     } 
 }

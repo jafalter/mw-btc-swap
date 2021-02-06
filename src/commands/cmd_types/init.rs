@@ -16,6 +16,7 @@ use crate::swap::swap_types::SwapSlatePriv;
 use crate::swap::swap_types::MWPriv;
 use crate::swap::swap_types::BTCPriv;
 use crate::swap::swap_types::BTCPub;
+use grin_util::secp::Secp256k1 as GrinSecp256k1;
 
 /// The Init command will create a new Atomic Swap slate 
 pub struct Init {
@@ -44,7 +45,7 @@ impl Init {
 }
 
 impl Command for Init {
-    fn execute(&self, settings : &Settings, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, String> {
+    fn execute(&self, settings : &Settings, rng : &mut OsRng, btc_secp : &Secp256k1<All>, grin_secp : &GrinSecp256k1) -> Result<SwapSlate, String> {
         println!("Executing init command");
         let mut rng = rand::thread_rng();
 
@@ -58,7 +59,8 @@ impl Command for Init {
                 partial_key : 0,
                 shared_coin : None,
                 refund_coin : None,
-                swapped_coin : None
+                swapped_coin : None,
+                change_coin : None
             };        
             let btcpriv = BTCPriv{
                 inputs : Vec::new(),
@@ -66,6 +68,7 @@ impl Command for Init {
                 sk : None,
                 x : None,
                 r_sk : None,
+                change : None,
                 swapped : None
             };
             let prv_slate = SwapSlatePriv{

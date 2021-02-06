@@ -26,4 +26,8 @@ impl MWCoin {
             value : value
         }
     }
+
+    pub fn to_string(&self) -> String {
+        format!("Commitment : {}, blinding_factor : {}, value : {}", self.commitment, self.blinding_factor, self.value)
+    }
 }

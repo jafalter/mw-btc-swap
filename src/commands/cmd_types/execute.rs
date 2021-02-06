@@ -1,4 +1,4 @@
-use crate::{bitcoin::bitcoin_core::BitcoinCore, grin::{grin_core::GrinCore, grin_tx::GrinTx}, net::http::RequestFactory, swap::slate::get_slate_checksum};
+use crate::{bitcoin::bitcoin_core::BitcoinCore, grin::{grin_core::GrinCore, grin_tx::GrinTx}, net::http::RequestFactory, swap::{protocol::exec_phase_swap_mw, slate::{get_slate_checksum, write_slate_to_disk}}};
 use crate::swap::slate::read_slate_from_disk;
 use rand::rngs::OsRng;
 use bitcoin::secp256k1::Secp256k1;
@@ -13,6 +13,7 @@ use std::net::Shutdown;
 use crate::enums::SwapType;
 use crate::swap::protocol::setup_phase_swap_btc;
 use crate::swap::protocol::setup_phase_swap_mw;
+use grin_util::secp::Secp256k1 as GrinSecp256k1;
 
 /// Start Atomic Swap Execution
 pub struct Execute {
@@ -28,7 +29,7 @@ impl Execute {
 }
 
 impl Command for Execute {
-    fn execute(&self, settings : &Settings, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, String> {
+    fn execute(&self, settings : &Settings, rng : &mut OsRng, btc_secp : &Secp256k1<All>, grin_secp : &GrinSecp256k1) -> Result<SwapSlate, String> {
         let mut slate : SwapSlate = read_slate_from_disk(self.swapid, &settings.slate_directory)
             .expect("Unable to read slate files from disk");
         let mut stream : TcpStream = TcpStream::connect(format!("{}:{}", slate.pub_slate.meta.server, slate.pub_slate.meta.port))
@@ -49,15 +50,17 @@ impl Command for Execute {
         else {
             if slate.pub_slate.btc.swap_type == SwapType::OFFERED {
                 // Offered value is btc, requested is grin
-                setup_phase_swap_mw(&mut slate, &mut stream, rng, &curve, &mut grin_core, &mut btc_core, &mut grin_tx)
-                    .expect("Setup phase failed");
-                Err(String::from("Not implemented"))
+                setup_phase_swap_mw(&mut slate, &mut stream, rng, &btc_secp, &mut grin_core, &mut btc_core, &mut grin_tx)?;
+                write_slate_to_disk(&slate, &settings.slate_directory, true, true);
+                exec_phase_swap_mw(&mut slate, &mut stream, &mut btc_core, rng, &mut grin_tx, &grin_secp, btc_secp)?;
+                Ok(slate)
             }
             else {
-                // Offerec value is grin, requested is btc
-                setup_phase_swap_btc(&mut slate, &mut stream, rng, &curve, &mut grin_core, &mut btc_core, &mut grin_tx)
-                    .expect("Setup phase failed");
-                Err(String::from("Not implemented"))
+                // Offered value is grin, requested is btc
+                setup_phase_swap_btc(&mut slate, &mut stream, rng, &btc_secp, &mut grin_core, &mut btc_core, &mut grin_tx)?;
+                write_slate_to_disk(&slate, &settings.slate_directory, true, true);
+                exec_phase_swap_mw(&mut slate, &mut stream, &mut btc_core, rng, &mut grin_tx, &grin_secp, btc_secp)?;
+                Ok(slate)
             }
         }
     }

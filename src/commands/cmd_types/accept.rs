@@ -5,6 +5,7 @@ use crate::Settings;
 use crate::commands::cmd_types::command::Command;
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::secp256k1::All;
+use grin_util::secp::Secp256k1 as GrinSecp256k1;
 
 /// Accept command allows a peer to accept the public slate file from an offerer
 pub struct Accept {
@@ -20,7 +21,7 @@ impl Accept {
 }
 
 impl Command for Accept {
-    fn execute(&self, settings : &Settings, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, String> {
+    fn execute(&self, settings : &Settings, rng : &mut OsRng, btc_secp : &Secp256k1<All>, grin_secp : &GrinSecp256k1) -> Result<SwapSlate, String> {
         let slate : SwapSlate = create_priv_from_pub(self.swapid, &settings.slate_directory)
             .expect("Unable to locate public slate file");
         println!("Created private slate file for {}", self.swapid);
