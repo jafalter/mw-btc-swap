@@ -1,4 +1,4 @@
-use crate::{grin::grin_routines::*, net::http::{JsonRpc, RequestFactory}, settings::GrinNodeSettings};
+use crate::{grin::grin_routines::*, net::http::{JsonRpc, JsonRpcParam, RequestFactory}, settings::GrinNodeSettings};
 use crate::grin::grin_types::MWCoin;
 use crate::util::get_os_rng;
 use grin_core::core::transaction::OutputFeatures;
@@ -792,7 +792,7 @@ impl GrinCore {
 
     /// Return the current height of the blockchain
     pub fn get_block_height(&mut self) -> Result<u64,String> {
-        let rpc = JsonRpc::new(String::from("2.0"), self.settings.id.clone(), String::from("get_tip"), String::from("[]"));
+        let rpc = JsonRpc::new(String::from("2.0"), self.settings.id.clone(), String::from("get_tip"), vec![]);
         let url = format!("http://{}:{}", self.settings.url, self.settings.port);
         let req = self.req_factory.new_json_rpc_request(url, rpc, self.settings.user.clone(), self.settings.pass.clone());
         match req.execute() {
@@ -824,7 +824,9 @@ impl GrinCore {
     /// * `tx` the transaction to broadcast
     pub fn push_transaction(&mut self, tx : Transaction) -> Result<(), String> {
         let str_tx = serde_json::to_string(&tx).unwrap();
-        let rpc = JsonRpc::new(String::from("2.0"), self.settings.id.clone(), String::from("push_transaction"), String::from(format!("[{}]", str_tx)));
+        let mut params : Vec<JsonRpcParam> = Vec::new();
+        params.push(JsonRpcParam::String(str_tx));
+        let rpc = JsonRpc::new(String::from("2.0"), self.settings.id.clone(), String::from("push_transaction"), params);
         let url = format!("http://{}:{}", self.settings.url, self.settings.port);
         let req = self.req_factory.new_json_rpc_request(url, rpc, self.settings.user.clone(), self.settings.pass.clone());
         match req.execute() {

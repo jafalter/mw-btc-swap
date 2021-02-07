@@ -1,4 +1,4 @@
-use crate::net::http::RequestFactory;
+use crate::net::http::{JsonRpcParam, RequestFactory};
 use crate::net::http::JsonRpc;
 use crate::settings::BtcNodeSettings;
 use crate::bitcoin::bitcoin_core_responses::NetworkInfo;
@@ -39,7 +39,7 @@ impl BitcoinCore {
 
     /// Query basic info about the node
     pub fn get_network_info(&self) -> Result<NetworkInfoResult,String> {
-        let rpc = JsonRpc::new(String::from("1.0"), self.settings.id.clone(), String::from("getnetworkinfo"), String::from("[]"));
+        let rpc = JsonRpc::new(String::from("1.0"), self.settings.id.clone(), String::from("getnetworkinfo"), vec![]);
         let url = format!("http://{}:{}", self.settings.url, self.settings.port);
         let req = self.req_factory.new_json_rpc_request(url, rpc, self.settings.user.clone(), self.settings.pass.clone());
         match req.execute() {
@@ -71,7 +71,10 @@ impl BitcoinCore {
     /// 
     /// * `addr` the address to index
     pub fn import_btc_address(&self, addr : Address) -> Result<(), String> {
-        let params : String = format!(r#"["{}","",false]"#, addr.to_string());
+        let mut params : Vec<JsonRpcParam> = Vec::new();
+        params.push(JsonRpcParam::String(addr.to_string()));
+        params.push(JsonRpcParam::String(String::from("")));
+        params.push(JsonRpcParam::Bool(false));
         let rpc = JsonRpc::new(String::from("1.0"), self.settings.id.clone(), String::from("importaddress"), params);
         let url = format!("http://{}:{}", self.settings.url, self.settings.port);
         let req = self.req_factory.new_json_rpc_request(url, rpc, self.settings.user.clone(), self.settings.pass.clone());
@@ -103,7 +106,10 @@ impl BitcoinCore {
     /// 
     /// * `addr` the address for which to check the balance
     pub fn get_address_final_balance(&self, addr: String) -> Result<u64, String> {
-        let params : String = format!(r#"[1,9999999,["{}"]]"#, addr);
+        let mut params : Vec<JsonRpcParam> = Vec::new();
+        params.push(JsonRpcParam::Int(1));
+        params.push(JsonRpcParam::Int(9999999));
+        params.push(JsonRpcParam::Vec(vec![addr]));
         let rpc = JsonRpc::new(String::from("1.0"), self.settings.id.clone(), String::from("listunspent"), params);
         let url = self.get_url();
         let req = self.req_factory.new_json_rpc_request(url, rpc, self.settings.user.clone(), self.settings.pass.clone());
@@ -136,7 +142,8 @@ impl BitcoinCore {
 
     /// Query the current blockheight of the bitcoin blockchain
     pub fn get_current_block_height(&self) -> Result<u64, String> {
-        let rpc = JsonRpc::new(String::from("1.0"), self.settings.id.clone(), String::from("getblockcount"), String::from("[]"));
+        
+        let rpc = JsonRpc::new(String::from("1.0"), self.settings.id.clone(), String::from("getblockcount"), vec![]);
         let url = self.get_url();
         let req = self.req_factory.new_json_rpc_request(url, rpc, self.settings.user.clone(), self.settings.pass.clone());
         match req.execute() {
@@ -176,7 +183,8 @@ impl BitcoinCore {
     /// * `tx` the signed transaction to send
     pub fn send_raw_transaction(&self, tx : Transaction) -> Result<(), String> {
         let txhex : Vec<u8> = tx.serialize();
-        let params = format!("[\"{}\"]", hex::encode(txhex));
+        let mut params : Vec<JsonRpcParam> = Vec::new();
+        params.push(JsonRpcParam::String(hex::encode(txhex)));
         let rpc = JsonRpc::new(String::from("1.0"), self.settings.id.clone(), String::from("sendrawtransaction"), params);
         let url = self.get_url();
         let req = self.req_factory.new_json_rpc_request(url, rpc, self.settings.user.clone(), self.settings.pass.clone());

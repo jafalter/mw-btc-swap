@@ -1,4 +1,4 @@
-use crate::{bitcoin::{bitcoin_types::BTCInput, btcroutines::{create_private_key, create_spend_lock_transaction, deserialize_priv_key, deserialize_pub_key, private_key_from_grin_sk, serialize_priv_key, serialize_pub_key, sign_lock_transaction_redeemer}}, grin::grin_routines::{deserialize_grin_pub_key, deserialize_secret_key, grin_pk_from_btc_pk, grin_sk_from_btc_sk}};
+use crate::{bitcoin::{bitcoin_types::BTCInput, btcroutines::{create_private_key, create_spend_lock_transaction, deserialize_priv_key, deserialize_pub_key, deserialize_script, private_key_from_grin_sk, serialize_priv_key, serialize_pub_key, sign_lock_transaction_redeemer, sign_lock_transaction_refund, sign_p2pkh_transaction}}, grin::grin_routines::{deserialize_grin_pub_key, deserialize_secret_key, grin_pk_from_btc_pk, grin_sk_from_btc_sk}};
 use crate::net::tcp::write_to_stream;
 use crate::SwapSlate;
 use crate::{
@@ -52,19 +52,16 @@ pub fn setup_phase_swap_mw(
     slate.pub_slate.btc.pub_a = Some(serialize_pub_key(&pub_a));
 
     // Send public key to peer
-    write_to_stream(stream, &hex::encode(pub_a.serialize()));
+    write_to_stream(stream, &serialize_pub_key(&pub_a));
 
     // Bobs pubkey
     msg_bob = read_from_stream(stream);
-    let pub_b =
-        PublicKey::from_slice(&hex::decode(msg_bob).expect("Failed to decode senders pubkey"))
-            .unwrap();
+    let pub_b = deserialize_pub_key(&msg_bob);
     slate.pub_slate.btc.pub_b = Some(serialize_pub_key(&pub_b));
 
     // Statement x
     msg_bob = read_from_stream(stream);
-    let pub_x = PublicKey::from_slice(&hex::decode(msg_bob).expect("Failed to decode statement X"))
-        .unwrap();
+    let pub_x = deserialize_pub_key(&msg_bob);
     slate.pub_slate.btc.pub_x = Some(serialize_pub_key(&pub_x));
 
     // Bitcoin lock height
@@ -194,13 +191,12 @@ pub fn setup_phase_swap_btc(
 
     // get the receivers pub key
     msg_alice = read_from_stream(stream);
-    let pub_a = PublicKey::from_slice(&hex::decode(msg_alice).unwrap())
-        .unwrap();
+    let pub_a = deserialize_pub_key(&msg_alice);
     slate.pub_slate.btc.pub_a = Some(serialize_pub_key(&pub_a));
 
     // Send sender pub key and statement pub_x
-    write_to_stream(stream, &hex::encode(pub_b.serialize()));
-    write_to_stream(stream, &hex::encode(pub_x.serialize()));
+    write_to_stream(stream, &serialize_pub_key(&pub_b));
+    write_to_stream(stream, &serialize_pub_key(&pub_x));
 
     // Now we lock up those bitcoins
     println!("Building Bitcoin lock transaction...");
@@ -218,18 +214,24 @@ pub fn setup_phase_swap_btc(
         pub_x,
         pub_b,
         pub_r,
-        inputs,
+        inputs.clone(),
         btc_amount,
         BTC_FEE,
         btc_lock_height,
     )?;
-    let pub_script = tx_lock.output.get(0).unwrap().script_pubkey.clone();
-    let ch_out = tx_lock.output.get(1).unwrap();
+    let tx_lock_clone = tx_lock.clone();
+    let pub_script = tx_lock_clone.output.get(0).unwrap().script_pubkey.clone();
+    let ch_out = tx_lock_clone.output.get(1).unwrap();
     let address = Address::from_script(&pub_script, bitcoin::Network::Testnet).unwrap();
 
-    let txid = tx_lock.clone().txid().to_string();
+    let txid = tx_lock_clone.txid().to_string();
+    let inp = inputs.get(0).unwrap();
+    let inp_pub_script = deserialize_script(&inp.pub_script);
+    let inp_sk = deserialize_priv_key(&inp.secret);
+    let inp_pk = PublicKey::from_private_key(secp, &inp_sk);
+    let signed_tx = sign_p2pkh_transaction(tx_lock, vec![inp_pub_script], vec![inp_sk], vec![inp_pk], secp);
     btc_core
-        .send_raw_transaction(tx_lock.clone())?;
+        .send_raw_transaction(signed_tx.clone())?;
     let change = BTCInput::new2(txid.clone(), 1, ch_out.value, sk_r, pub_r, ch_out.script_pubkey.clone());
     slate.prv_slate.btc.change = Some(change.clone());
     println!("Published Bitcoin lock transaction with txid: {}, address: {}", txid, address.to_string());

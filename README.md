@@ -7,6 +7,7 @@ Implementation for my masters thesis
 * pkg-config
 * rust + cargo
 * libssl-dev
+* libclang-dev
 
 # commands
 
@@ -34,7 +35,7 @@ to own some Grin and Alice BTC so agree to conduct a swap.
 The exchange rate is that 1 Grin = 0.000011 BTC, Alice agrees to give 1.5 Grin (1500000000 Nanogrin) to Bob for which she wants 0.000016 BTC (1600 sats).
 One of the two parties (in this case Bob) initiates the swap with the following command:
 
-`./mw-btc-swap init --from-currency BTC --to-currency GRIN --from-amount 1600 --to-amount 1500000000 --timeout 600`
+`./mw-btc-swap init --from-currency BTC --to-currency GRIN --from-amount 1600 --to-amount 1500000 --timeout 600`
 
 The program created a new swap with the id `8715159615153475876` and the files `8715159615153475876.prv.json`, `8715159615153475876.pub.json`
 
@@ -73,7 +74,7 @@ To import grin coins one has to provide the following required arguments
 
 Now Bob needs to import the spending information of the UTXO that we wants to use for the swap. 
 
-`./mw-btc-swap import btc --swapid 8715159615153475876 --sk cPg1qrQrVDc6fvwSHWkGg64gVZHxekXQ7hU2AizkKWCpPxXvJm5J  --txid 3f11e68ec0798b3f550c99b232353f51ba9a2442c731580e521777c79c1829da --vout 1 --value 273384791826996 --pub_script 76a914137aabb97216f7bdf4d5f4a53fc9504b0dcc396488ac`
+`./mw-btc-swap import btc --swapid 8715159615153475876 --sk cPg1qrQrVDc6fvwSHWkGg64gVZHxekXQ7hU2AizkKWCpPxXvJm5J  --txid 3f11e68ec0798b3f550c99b232353f51ba9a2442c731580e521777c79c1829da --vout 1 --value 1826996 --pub_script 76a914137aabb97216f7bdf4d5f4a53fc9504b0dcc396488ac`
 
 If we look into `8715159615153475876.prv.json` we can see that now the Bitcoin UTXO has been imported. Since the value is greater then `1600` (the amount Bob wants to swap) he can now start listening for a trading counterpart using the listen command.
 

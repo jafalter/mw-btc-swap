@@ -109,7 +109,7 @@ pub fn create_lock_transaction(recv_pk : PublicKey, pub_x : PublicKey, refund_pk
 ///
 /// * `recv_pk` key to be used for the p2pkh output
 /// * `input` the locked input to be spend
-/// * `amount` the amount for the output
+/// * `amount` the amount for the output in sats
 /// * `fee` the fee given to miners, note that amount + fee must equal the value of the locked coin
 pub fn create_spend_lock_transaction(recv_pk : &PublicKey, input : BTCInput, amount : u64, fee : u64, lock_time : u32) -> Result<Transaction,String> {
     let mut txinp : Vec<TxIn> = Vec::new();
