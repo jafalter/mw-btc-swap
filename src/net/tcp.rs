@@ -1,4 +1,4 @@
-use std::io::{BufReader, BufRead};
+use std::{io::{BufReader, BufRead}, thread::sleep, time::Duration};
 use std::net::{TcpStream};
 use std::io::Write;
 
@@ -12,7 +12,9 @@ use std::io::Write;
 /// * `msg` the message to write
 pub fn send_msg(stream : &mut TcpStream, msg : &String) {
     // To each message we excpect an acknowlege response
-    write_to_stream(stream, msg).unwrap(); 
+    println!("Writing message to stream {}", msg);
+    write_to_stream(stream, msg).unwrap();
+    sleep(Duration::from_millis(200));
     let r = read_from_stream(stream).unwrap();
     assert_eq!(r, "ACK");
 }
@@ -26,12 +28,13 @@ pub fn send_msg(stream : &mut TcpStream, msg : &String) {
 /// * `stream` TCP channel to exchange messages bidirectionally
 pub fn receive_msg(stream : &mut TcpStream) -> String {
     let msg = read_from_stream(stream).unwrap();
+    println!("Read message from stream {}", msg);
     write_to_stream(stream, &String::from("ACK")).unwrap();
     msg
 }
 
 fn write_to_stream(stream : &mut TcpStream, msg : &String) -> Result<(), String> {
-    println!("Writing message to stream {}", msg);
+    println!("W");
     match writeln!(stream, "{}", msg) {
         Ok(_) => Ok(()),
         Err(e) => Err(e.to_string())
@@ -41,10 +44,10 @@ fn write_to_stream(stream : &mut TcpStream, msg : &String) -> Result<(), String>
 fn read_from_stream(stream : &mut TcpStream) -> Result<String, String> {
     let mut reader = BufReader::new(stream);
     let mut msg = String::new();
+    println!("R");
     match reader.read_line(&mut msg) {
         Ok(len) => {    
             msg.truncate(len -1);
-            println!("Read message from stream {}", msg);
             Ok(msg)
         },
         Err(e) => {
