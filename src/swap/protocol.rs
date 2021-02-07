@@ -1,5 +1,5 @@
 use crate::{bitcoin::{bitcoin_types::BTCInput, btcroutines::{create_private_key, create_spend_lock_transaction, deserialize_priv_key, deserialize_pub_key, deserialize_script, private_key_from_grin_sk, serialize_priv_key, serialize_pub_key, sign_lock_transaction_redeemer, sign_lock_transaction_refund, sign_p2pkh_transaction}}, grin::grin_routines::{deserialize_grin_pub_key, deserialize_secret_key, grin_pk_from_btc_pk, grin_sk_from_btc_sk}};
-use crate::net::tcp::write_to_stream;
+use crate::net::tcp::send_msg;
 use crate::SwapSlate;
 use crate::{
     bitcoin::{
@@ -8,7 +8,7 @@ use crate::{
     },
     constants::{BTC_FEE, MAX_ATTEMPTS_VERF_FUNDS},
     grin::{grin_core::GrinCore, grin_tx::GrinTx},
-    net::tcp::read_from_stream,
+    net::tcp::receive_msg,
 };
 use bitcoin::{PrivateKey, secp256k1::All};
 use bitcoin::util::key::PublicKey;
@@ -52,20 +52,20 @@ pub fn setup_phase_swap_mw(
     slate.pub_slate.btc.pub_a = Some(serialize_pub_key(&pub_a));
 
     // Send public key to peer
-    write_to_stream(stream, &serialize_pub_key(&pub_a));
+    send_msg(stream, &serialize_pub_key(&pub_a));
 
     // Bobs pubkey
-    msg_bob = read_from_stream(stream);
+    msg_bob = receive_msg(stream);
     let pub_b = deserialize_pub_key(&msg_bob);
     slate.pub_slate.btc.pub_b = Some(serialize_pub_key(&pub_b));
 
     // Statement x
-    msg_bob = read_from_stream(stream);
+    msg_bob = receive_msg(stream);
     let pub_x = deserialize_pub_key(&msg_bob);
     slate.pub_slate.btc.pub_x = Some(serialize_pub_key(&pub_x));
 
     // Bitcoin lock height
-    msg_bob = read_from_stream(stream);
+    msg_bob = receive_msg(stream);
     let lock_time_btc: i64 = msg_bob.parse::<i64>().unwrap();
     slate.pub_slate.btc.lock_time = Some(lock_time_btc);
     // We now calculate the bitcoin address on which Bob is supposed to lock his BTC
@@ -75,8 +75,8 @@ pub fn setup_phase_swap_mw(
     btc_core.import_btc_address(addr.clone()).unwrap();
 
     // Now wait for Bob to send the lock address himself and then verify the locked funds
-    let address = read_from_stream(stream);
-    let txid = read_from_stream(stream);
+    let address = receive_msg(stream);
+    let txid = receive_msg(stream);
     println!("Verifing the locked funds on address : {} and txid: {}", address, txid);
     if addr.clone().to_string() != msg_bob {
         slate.pub_slate.status = crate::enums::SwapStatus::FAILED;
@@ -112,7 +112,7 @@ pub fn setup_phase_swap_mw(
             let grin_lock_height = grin_height + slate.pub_slate.mw.timelock;
             slate.pub_slate.mw.lock_time = Some(i64::try_from(grin_lock_height).unwrap());
             // Send over grin_lock_height to Bob
-            write_to_stream(stream, &grin_lock_height.to_string());
+            send_msg(stream, &grin_lock_height.to_string());
 
             // Create shared MW output
             println!("Running protocol to create shared Mimblewimble output...");
@@ -190,13 +190,13 @@ pub fn setup_phase_swap_btc(
     slate.pub_slate.btc.pub_x = Some(serialize_pub_key(&pub_x));
 
     // get the receivers pub key
-    msg_alice = read_from_stream(stream);
+    msg_alice = receive_msg(stream);
     let pub_a = deserialize_pub_key(&msg_alice);
     slate.pub_slate.btc.pub_a = Some(serialize_pub_key(&pub_a));
 
     // Send sender pub key and statement pub_x
-    write_to_stream(stream, &serialize_pub_key(&pub_b));
-    write_to_stream(stream, &serialize_pub_key(&pub_x));
+    send_msg(stream, &serialize_pub_key(&pub_b));
+    send_msg(stream, &serialize_pub_key(&pub_x));
 
     // Now we lock up those bitcoins
     println!("Building Bitcoin lock transaction...");
@@ -206,7 +206,7 @@ pub fn setup_phase_swap_btc(
     let btc_lock_height: i64 =
         i64::try_from(btc_current_height + slate.pub_slate.btc.timelock).unwrap();
     // Send the bitcoin locktime to alice
-    write_to_stream(stream, &btc_lock_height.to_string());
+    send_msg(stream, &btc_lock_height.to_string());
     slate.pub_slate.btc.lock_time = Some(btc_lock_height);
 
     let tx_lock = create_lock_transaction(
@@ -238,12 +238,12 @@ pub fn setup_phase_swap_btc(
     println!("Bitcoin change output: {}", change.clone().to_string());
 
     // Send the address, txid over to Alice and let her verify the locked funds
-    write_to_stream(stream, &address.to_string());
-    write_to_stream(stream, &txid);
+    send_msg(stream, &address.to_string());
+    send_msg(stream, &txid);
     slate.pub_slate.btc.lock = Some(BTCInput::new2(txid, 0, btc_amount,  sk_b, pub_b, pub_script));
 
     // Receive the grin side lock height from alice
-    msg_alice = read_from_stream(stream);
+    msg_alice = receive_msg(stream);
     let lock_height_grin = msg_alice.parse::<i64>().unwrap();
     slate.pub_slate.mw.lock_time = Some(lock_height_grin);
 

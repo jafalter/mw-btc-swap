@@ -1,8 +1,8 @@
 use crate::{bitcoin::bitcoin_core::BitcoinCore, grin::{grin_core::GrinCore, grin_tx::GrinTx}, net::http::RequestFactory, swap::{protocol::setup_phase_swap_mw, slate}};
 use crate::swap::protocol::setup_phase_swap_btc;
-use crate::net::tcp::write_to_stream;
+use crate::net::tcp::send_msg;
 use crate::swap::slate::get_slate_checksum;
-use crate::net::tcp::read_from_stream;
+use crate::net::tcp::receive_msg;
 use crate::swap::slate::read_slate_from_disk;
 use rand::rngs::OsRng;
 use bitcoin::secp256k1::Secp256k1;
@@ -65,7 +65,7 @@ impl Command for Listen {
             for client in listener.incoming() {
                 println!("A client connected");
                 let mut stream = client.unwrap();
-                let msg = read_from_stream(&mut stream);
+                let msg = receive_msg(&mut stream);
                 let id = swp_slate.id.clone();
                 let checksum = get_slate_checksum(id, &settings.slate_directory).unwrap();
                 println!("Calculated slate checksum {}", checksum);
@@ -73,7 +73,7 @@ impl Command for Listen {
                 if msg.eq_ignore_ascii_case(&checksum) {
                     println!("Swap Checksum matched");
                     // Send back OK message
-                    write_to_stream(&mut stream, &String::from("OK"));
+                    send_msg(&mut stream, &String::from("OK"));
                     if swp_slate.pub_slate.btc.swap_type == SwapType::OFFERED {
                         setup_phase_swap_btc(&mut swp_slate, &mut stream, rng, &btc_secp, &mut grin_core, &mut btc_core, &mut grin_tx)?;
                         setup_phase_swap_btc(&mut swp_slate, &mut stream, rng, btc_secp, &mut grin_core, &mut btc_core, &mut grin_tx)?;
@@ -87,7 +87,7 @@ impl Command for Listen {
                 }
                 else {
                     println!("Swap Checksum did not match, cancelling");
-                    write_to_stream(&mut stream, &String::from("FAULT"));
+                    send_msg(&mut stream, &String::from("FAULT"));
                 }
             };
             Ok(swp_slate)

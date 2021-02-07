@@ -7,8 +7,8 @@ use crate::SwapSlate;
 use crate::Settings;
 use crate::commands::cmd_types::command::Command;
 use std::net::{TcpStream};
-use crate::net::tcp::write_to_stream;
-use crate::net::tcp::read_from_stream;
+use crate::net::tcp::send_msg;
+use crate::net::tcp::receive_msg;
 use std::net::Shutdown;
 use crate::enums::SwapType;
 use crate::swap::protocol::setup_phase_swap_btc;
@@ -40,8 +40,8 @@ impl Command for Execute {
         // first message exchanged is a hash of the pub slate file
         println!("Connected to peer");
         let checksum = get_slate_checksum(slate.id, &settings.slate_directory).unwrap();
-        write_to_stream(&mut stream, &checksum);
-        let resp = read_from_stream(&mut stream);
+        send_msg(&mut stream, &checksum);
+        let resp = receive_msg(&mut stream);
         if resp.eq_ignore_ascii_case("OK") == false {
             stream.shutdown(Shutdown::Both)
                 .expect("Failed to shutdown stream");
