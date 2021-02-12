@@ -107,7 +107,7 @@ impl BitcoinCore {
     /// * `addr` the address for which to check the balance
     pub fn get_address_final_balance(&self, addr: String) -> Result<u64, String> {
         let mut params : Vec<JsonRpcParam> = Vec::new();
-        params.push(JsonRpcParam::Int(1));
+        params.push(JsonRpcParam::Int(0));
         params.push(JsonRpcParam::Int(9999999));
         params.push(JsonRpcParam::Vec(vec![addr]));
         let rpc = JsonRpc::new(String::from("1.0"), self.settings.id.clone(), String::from("listunspent"), params);

@@ -146,11 +146,16 @@ pub fn serialize_secret_key(key: &SecretKey) -> String {
 /// * `key` the key serialized as hex string
 /// * `secp` Secp256 functionatlity
 pub fn deserialize_secret_key(key: &String, secp: &Secp256k1) -> SecretKey {
-    SecretKey::from_slice(
-        secp,
-        &hex::decode(key).expect("Failed to deserialize a secret key from hex string"),
-    )
-    .expect("Failed to deserialize a secret key from hex string")
+    if key == "0000000000000000000000000000000000000000000000000000000000000000" {
+        ZERO_KEY
+    }
+    else {
+        SecretKey::from_slice(
+            secp,
+            &hex::decode(key).expect("Failed to deserialize a secret key from hex string"),
+        )
+        .expect("Failed to deserialize a secret key from hex string")
+    }
 }
 
 //// Create a minimal context object needed for Slate fill_round_1
@@ -439,6 +444,13 @@ mod test {
         assert!(secp
             .verify_bullet_proof(com, proof.clone(), None)
             .is_ok());
+    }
+
+    #[test]
+    pub fn test_deserialize_zero_key() {
+        let secp = Secp256k1::with_caps(ContextFlag::Commit);
+        let hex = String::from("0000000000000000000000000000000000000000000000000000000000000000");
+        let key = deserialize_secret_key(&hex, &secp);
     }
 
 }

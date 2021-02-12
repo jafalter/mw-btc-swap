@@ -78,7 +78,7 @@ pub fn setup_phase_swap_mw(
     let address = receive_msg(stream);
     let txid = receive_msg(stream);
     println!("Verifing the locked funds on address : {} and txid: {}", address, txid);
-    if addr.clone().to_string() != msg_bob {
+    if addr.clone().to_string() != address {
         slate.pub_slate.status = crate::enums::SwapStatus::FAILED;
         Err(String::from("Lock address sent by Bob doesn't match what we have calculated, stopping swap"))
     } else {
@@ -224,12 +224,12 @@ pub fn setup_phase_swap_btc(
     let ch_out = tx_lock_clone.output.get(1).unwrap();
     let address = Address::from_script(&pub_script, bitcoin::Network::Testnet).unwrap();
 
-    let txid = tx_lock_clone.txid().to_string();
     let inp = inputs.get(0).unwrap();
     let inp_pub_script = deserialize_script(&inp.pub_script);
     let inp_sk = deserialize_priv_key(&inp.secret);
     let inp_pk = PublicKey::from_private_key(secp, &inp_sk);
     let signed_tx = sign_p2pkh_transaction(tx_lock, vec![inp_pub_script], vec![inp_sk], vec![inp_pk], secp);
+    let txid = signed_tx.txid().to_string();
     btc_core
         .send_raw_transaction(signed_tx.clone())?;
     let change = BTCInput::new2(txid.clone(), 1, ch_out.value, sk_r, pub_r, ch_out.script_pubkey.clone());

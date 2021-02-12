@@ -793,7 +793,7 @@ impl GrinCore {
     /// Return the current height of the blockchain
     pub fn get_block_height(&mut self) -> Result<u64,String> {
         let rpc = JsonRpc::new(String::from("2.0"), self.settings.id.clone(), String::from("get_tip"), vec![]);
-        let url = format!("http://{}:{}", self.settings.url, self.settings.port);
+        let url = format!("http://{}:{}/v2/foreign", self.settings.url, self.settings.port);
         let req = self.req_factory.new_json_rpc_request(url, rpc, self.settings.user.clone(), self.settings.pass.clone());
         match req.execute() {
             Ok(x) => {
