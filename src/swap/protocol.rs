@@ -14,6 +14,7 @@ use bitcoin::{PrivateKey, secp256k1::All};
 use bitcoin::util::key::PublicKey;
 use bitcoin::util::psbt::serialize::Serialize;
 use bitcoin::{secp256k1::Secp256k1, Address};
+use grin_core::global::set_local_chain_type;
 use grin_util::secp::Secp256k1 as GrinSecp256k1;
 use rand::rngs::OsRng;
 use std::convert::TryFrom;
@@ -39,6 +40,7 @@ pub fn setup_phase_swap_mw(
     btc_core: &mut BitcoinCore,
     grin_tx: &mut GrinTx,
 ) -> Result<(), String> {
+    set_local_chain_type(grin_core::global::ChainTypes::Testnet);
     println!("Starting setup phase MW");
     slate.pub_slate.status = crate::enums::SwapStatus::SETUP;
     let mut msg_bob = "".to_string();
@@ -166,6 +168,7 @@ pub fn setup_phase_swap_btc(
     btc_core: &mut BitcoinCore,
     grin_tx: &mut GrinTx,
 ) -> Result<(), String> {
+    set_local_chain_type(grin_core::global::ChainTypes::Testnet);
     println!("Starting setup phase BTC");
     slate.pub_slate.status = crate::enums::SwapStatus::SETUP;
     let mut msg_alice = "".to_string();
@@ -282,6 +285,7 @@ pub fn exec_phase_swap_mw(
     grin_secp: &GrinSecp256k1,
     btc_secp: &Secp256k1<All>,
 ) -> Result<(), String> {
+    set_local_chain_type(grin_core::global::ChainTypes::Testnet);
     slate.pub_slate.status = crate::enums::SwapStatus::EXECUTING;
     println!("Running Atomic Swap execution phase on mimblewimble side");
     let shared_coin = slate.prv_slate.mw.shared_coin.clone().unwrap();
@@ -342,6 +346,7 @@ pub fn exec_phase_swap_btc(
     grin_tx: &mut GrinTx,
     secp: &GrinSecp256k1,
 ) -> Result<(), String> {
+    set_local_chain_type(grin_core::global::ChainTypes::Testnet);
     slate.pub_slate.status = crate::enums::SwapStatus::EXECUTING;
     let shared_coin = slate.prv_slate.mw.shared_coin.clone().unwrap();
     let value = shared_coin.value;

@@ -227,7 +227,7 @@ impl GrinTx {
     ) -> Result<DBuildMWTxResult, String> {
         let dspend_coins_result = self
             .core
-            .spend_coins(vec![inp], fund_value, timelock, 2, 3)?;
+            .spend_coins(vec![inp], fund_value, timelock, 1, 3)?;
         // Send initial slate to Bob
         let ptx = serde_json::to_string(&dspend_coins_result.slate)
             .unwrap();
@@ -288,7 +288,7 @@ impl GrinTx {
             false,
             None,
             None,
-        );
+        ).unwrap();
         // Send the updated pre-tx to Alice
         let ptx2 = serde_json::to_string(&fin_result)
             .unwrap();

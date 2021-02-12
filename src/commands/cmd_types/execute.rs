@@ -1,4 +1,4 @@
-use crate::{bitcoin::bitcoin_core::BitcoinCore, grin::{grin_core::GrinCore, grin_tx::GrinTx}, net::http::RequestFactory, swap::{protocol::exec_phase_swap_mw, slate::{get_slate_checksum, write_slate_to_disk}}};
+use crate::{bitcoin::bitcoin_core::BitcoinCore, grin::{grin_core::GrinCore, grin_tx::GrinTx}, net::http::RequestFactory, swap::{protocol::exec_phase_swap_mw, protocol::exec_phase_swap_btc, slate::{get_slate_checksum, write_slate_to_disk}}};
 use crate::swap::slate::read_slate_from_disk;
 use rand::rngs::OsRng;
 use bitcoin::secp256k1::Secp256k1;
@@ -59,7 +59,7 @@ impl Command for Execute {
                 // Offered value is grin, requested is btc
                 setup_phase_swap_btc(&mut slate, &mut stream, rng, &btc_secp, &mut grin_core, &mut btc_core, &mut grin_tx)?;
                 write_slate_to_disk(&slate, &settings.slate_directory, true, true);
-                exec_phase_swap_mw(&mut slate, &mut stream, &mut btc_core, rng, &mut grin_tx, &grin_secp, btc_secp)?;
+                exec_phase_swap_btc(&mut slate, &mut stream, &mut btc_core, &mut grin_core, &mut grin_tx, &grin_secp)?;
                 Ok(slate)
             }
         }

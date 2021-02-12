@@ -1,11 +1,11 @@
 Bob:
 
-./mw-btc-swap init --from-currency BTC --to-currency GRIN --from-amount 1600 --to-amount 150000 --timeout 600
-./mw-btc-swap import btc --swapid 9779661781937280126 --sk cU9iCd4EAisHK21VBuaSRZUYSaWGUTLybERvH9ZaPFQuESnQvvM2 --txid 4062edeb6429fa6ceed7fbff68424b38c20240bf5e3e3a6c284febd9244700ea --vout 1 --value 1820696 --pub_script 76a9141d8cc3d38c74712990d120b59ebc7a4e5628fd9488ac
-./mw-btc-swap listen --swapid 9779661781937280126
+./mw-btc-swap init --from-currency BTC --to-currency GRIN --from-amount 1600 --to-amount 100000000 --timeout 600
+./mw-btc-swap import btc --swapid 13415674843628143771 --sk cVV1qKpybDFyZHjj5nVkqZthMcr5BU4cUrk2iXA4arSVdwmCwiyz --txid b29938d6be2839dba144c5187f1e505a31201b61188cfc252c3231de6c93f474 --vout 1 --value 1814396 --pub_script 76a914e7e018d7906148cdb6b95693e9f9c5976692ff6288ac
+./mw-btc-swap listen --swapid 13415674843628143771
 
 Alice:
 
-./mw-btc-swap accept --swapid 9779661781937280126
-./mw-btc-swap import grin --swapid 9779661781937280126 --commitment 09257c975816e6ba6e9a66d1956a202b80d2cd25889a6bef2db0542d51fad6df8e --blinding_factor afa38b309656a60024064b045ce30209c7fd5d406aa2e9216b74287f7425da41 --value 2000000000
-./mw-btc-swap execute --swapid 9779661781937280126
+./mw-btc-swap accept --swapid 13415674843628143771
+./mw-btc-swap import grin --swapid 13415674843628143771 --commitment 09257c975816e6ba6e9a66d1956a202b80d2cd25889a6bef2db0542d51fad6df8e --blinding_factor afa38b309656a60024064b045ce30209c7fd5d406aa2e9216b74287f7425da41 --value 2000000000
+./mw-btc-swap execute --swapid 13415674843628143771

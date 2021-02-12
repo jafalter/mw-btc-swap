@@ -116,7 +116,7 @@ impl GrinCore {
             Err(String::from("No inputs provided"))
         } else if fund_value <= 0 {
             Err(String::from("Invalid parameters for fund_value provided"))
-        } else if inpval < (fund_value + fee) {
+        } else if num_of_outputs > 1 && inpval < (fund_value + fee) || inpval < fund_value  {
             Err(String::from(
                 "Spend coins function failed, input coins do not have enough value",
             ))
