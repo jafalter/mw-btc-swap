@@ -13,6 +13,7 @@ use crate::constants;
 
 use std::u32;
 
+use bitcoin::{PrivateKey, PublicKey};
 use clap::{
     ArgMatches
 };
@@ -31,7 +32,7 @@ pub fn parse_arguments(matches: ArgMatches) -> Result<Box<dyn Command>, &'static
         let to_currency = parse_currency_from_string(to_currency_arg);
         let from_amount : u64 = from_amount_arg.parse::<u64>().unwrap();
         let to_amount : u64 = to_amount_arg.parse::<u64>().unwrap();
-        let timeout_min : u32 = timeout_arg.parse::<u32>().unwrap();
+        let timeout_min : u64 = timeout_arg.parse::<u64>().unwrap();
 
         // Validate arguments
         let from_overflow = ( from_currency == Currency::BTC && from_amount > constants::BTC_MAX_SATS ) || ( from_currency == Currency::GRIN && from_amount > constants::GRIN_MAX_NANOGRIN );
@@ -56,8 +57,7 @@ pub fn parse_arguments(matches: ArgMatches) -> Result<Box<dyn Command>, &'static
                     let txid = String::from(subargs.value_of("txid").unwrap());
                     let vout_arg = String::from(subargs.value_of("vout").unwrap());
                     let value_arg = String::from(subargs.value_of("value").unwrap());
-                    let secret = String::from(subargs.value_of("secret").unwrap());
-                    let pub_key = String::from(subargs.value_of("pub_key").unwrap());
+                    let sk_wif = String::from(subargs.value_of("sk").unwrap());
                     let pub_script = String::from(subargs.value_of("pub_script").unwrap());
                     
                     // Parse arguments
@@ -65,7 +65,7 @@ pub fn parse_arguments(matches: ArgMatches) -> Result<Box<dyn Command>, &'static
                     let vout : u32 = vout_arg.parse::<u32>().unwrap();
                     let value : u64 = value_arg.parse::<u64>().unwrap();
 
-                    Ok(Box::new(ImportBtc::new(swapid, txid, vout, value, secret, pub_key, pub_script)))
+                    Ok(Box::new(ImportBtc::new(swapid, txid, vout, value, sk_wif, pub_script)))
                 },
                 ("grin", Some(subargs)) => {
                     let swapid_arg = String::from(subargs.value_of("swapid").unwrap());

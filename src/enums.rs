@@ -29,7 +29,8 @@ pub enum SwapStatus {
     INITIALIZED,
     SETUP,
     EXECUTING,
-    FINISHED
+    FINISHED,
+    FAILED
 }
 
 #[derive(PartialEq, Serialize, Deserialize)]

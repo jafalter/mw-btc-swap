@@ -7,6 +7,7 @@ Implementation for my masters thesis
 * pkg-config
 * rust + cargo
 * libssl-dev
+* libclang-dev
 
 # commands
 
@@ -27,22 +28,20 @@ The command takes the following required arguments:
 
 --timeout <minutes> Once the swap has started what is the amount of minutes until it should cancel and timeout.
 
-Let say we have Alice and Bob. Bob owns 0.03566 BTC which he wants to swap for Grin coins. He looks at the current exchange rate and sees that he should be able to receive around 5000 Grin for his his Bitcoin. The command line uses the smallest units (satoshis and nanogrin) for each chain so:
+Let say we have Alice and Bob who would like to trade.
+Alice owns 2 Grin (2000000000 Nanogrin) in the commitment 09257c975816e6ba6e9a66d1956a202b80d2cd25889a6bef2db0542d51fad6df8e of which she knows the opening.
+Bob has 0.01826996 (1826996 sats) locked in a P2PKH address (mhHx61qiNcdFgXo722fDfMN4yRe1zH7bx8) for which he knows the unlocking information. Bob would like
+to own some Grin and Alice BTC so agree to conduct a swap.
+The exchange rate is that 1 Grin = 0.000011 BTC, Alice agrees to give 1.5 Grin (1500000000 Nanogrin) to Bob for which she wants 0.000016 BTC (1600 sats).
+One of the two parties (in this case Bob) initiates the swap with the following command:
 
-0.03566 BTC = 3566000 sats
-5000 Grin = 5000000000000 nanogrin
-
-He chooses a 10 hour timeout, meaning that if the swap (once started) does not complete within this time limit both participents can redeem original inputs. 
-
-The call on the command line looks like this:
-
-`./mw-btc-swap init --from-amount 3566000 --from-currency BTC --to-amount 5000000000000 --to-currency GRIN --timeout 600`
+`./mw-btc-swap init --from-currency BTC --to-currency GRIN --from-amount 1600 --to-amount 1500000 --timeout 600`
 
 The program created a new swap with the id `8715159615153475876` and the files `8715159615153475876.prv.json`, `8715159615153475876.pub.json`
 
 ## import
 
-The import command is used to import outputs the participent owns into the program.
+The import command is used to import outputs/coins the participent owns into the program.
 Currently it is supported to import Bitcoin and Grin keys by providing the `btc` or `grin` subcommand
 
 ### btc
@@ -51,13 +50,15 @@ To import btc outputs one has to provide the following required arguments
 
 --swapid <integer> The id of the swap (as previously output by init)
 
---secret <string> The private key encoded as a hexadecimal string
+--sk <string> The private key encoded in wif format
 
 --txid <string> The id (hash) of the unspent transaction output
 
 --vout <integer> The number of the output of the unspent transaction which should be spent
 
 --value <integer> The value of the output which we are importing given in satoshis
+
+--pub_script <string> The pub script (as hexadecimal) under which the Bitcoins are locked (currently only standard P2PKH is supported)
 
 ### grin
 
@@ -71,34 +72,11 @@ To import grin coins one has to provide the following required arguments
 
 --value <integer> The value of the coin commitment
 
-In our previous example Bob now would have to import UTXOs of minimum value `3566000` sats in order to start offering the swap.
-Lets say Bob has `0.27338479 BTC` stored in a transaction with the id `ac3947090566ffa1780caa0348ea1638a2b0bc5b4ca7f37f5822fadd9f37ae58` as the second output to vout has to be `1` (counting from 0). The private key to the output is `E9873D79C6D87DC0FB6A5778633389F4453213303DA61F20BD67FC233AA33262` so the import command would look like:
+Now Bob needs to import the spending information of the UTXO that we wants to use for the swap. 
 
-`./mw-btc-swap import btc --swapid 8715159615153475876 --secret    --txid ac3947090566ffa1780caa0348ea1638a2b0bc5b4ca7f37f5822fadd9f37ae58 --vout 1 --value 27338479`
+`./mw-btc-swap import btc --swapid 8715159615153475876 --sk cPg1qrQrVDc6fvwSHWkGg64gVZHxekXQ7hU2AizkKWCpPxXvJm5J  --txid 3f11e68ec0798b3f550c99b232353f51ba9a2442c731580e521777c79c1829da --vout 1 --value 1826996 --pub_script 76a914137aabb97216f7bdf4d5f4a53fc9504b0dcc396488ac`
 
-If we look into `8715159615153475876.prv.json` we can see that now the Bitcoin UTXO has been imported. Since the value is greater then `3566000` (the amount Bob wants to swap) he can now start listening for a trading counterpart using the listen command.
-
-```json
-{
-   "mw":{
-      "inputs":[
-         
-      ],
-      "partial_key":0
-   },
-   "btc":{
-      "inputs":[
-         {
-            "txid":"ac3947090566ffa1780caa0348ea1638a2b0bc5b4ca7f37f5822fadd9f37ae58",
-            "vout":1,
-            "value":27338479,
-            "secret":"0xE9873D79C6D87DC0FB6A5778633389F4453213303DA61F20BD67FC233AA33262"
-         }
-      ],
-      "witness":0
-   }
-}
-```
+If we look into `8715159615153475876.prv.json` we can see that now the Bitcoin UTXO has been imported. Since the value is greater then `1600` (the amount Bob wants to swap) he can now start listening for a trading counterpart using the listen command.
 
 ## listen 
 
@@ -110,7 +88,7 @@ The command takes the following required arguments:
 
 The example command would then look like:
 
-`./mw-btc-swaps listen --swapid 8715159615153475876`
+`./mw-btc-swap listen --swapid 8715159615153475876`
 
 ## accept
 
@@ -120,9 +98,19 @@ The command takes the following mandatory argument:
 
 --swapid <integer> the id of the atomic swap for which you have received the public file. (Make sure the file was placed into the correct directory)
 
+After having received the public swap file from Bob Alice can call the accept command as follows:
+
+`./mw-btc-swap accept --swapid 8715159615153475876`
+
+She will then import her grin as following:
+
+`./mw-btc-swap import grin --swapid 8715159615153475876 --commitment 09257c975816e6ba6e9a66d1956a202b80d2cd25889a6bef2db0542d51fad6df8e --blinding_factor afa38b309656a60024064b045ce30209c7fd5d406aa2e9216b74287f7425da41 --value 2000000000`
+
 ## execute
 
 The execute command will connect to the peer's TCP server and start the Atomic Swap protocol for which messages will be exchanged via TCP
 The command takes the following mandatory argument:
+
+`./mw-btc-swap execute --swapid 8715159615153475876`
 
 --swapid <integer> the id of the atomic swap which we want to start

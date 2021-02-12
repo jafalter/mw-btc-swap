@@ -19,6 +19,7 @@ use clap::{
 };
 
 use settings::Settings;
+use grin_util::secp::{ContextFlag, Secp256k1 as GrinSecp256k1};
 
 fn usage() {
     println!("usage: init|offer|accept|redeem options");
@@ -31,14 +32,13 @@ fn usage() {
 /// for example:
 /// SETTINGS_TCP_ADDR=alice
 fn overwrite_settings_with_env(settings : &Settings) -> Settings {
-    let mw_node_url = env::var("SETTINGS_MW_NODE_URL").unwrap_or(settings.mw_node_url.clone());
     let tcp_addr = env::var("SETTINGS_TCP_ADDR").unwrap_or(settings.tcp_addr.clone());
     let tcp_port = env::var("SETTINGS_TCP_PORT").unwrap_or(settings.tcp_port.clone());
     let slate_directory = env::var("SETTINGS_SLATE_DIRECTORY").unwrap_or(settings.slate_directory.clone());
 
     Settings{
         btc : settings.btc.clone(),
-        mw_node_url : mw_node_url,
+        grin : settings.grin.clone(),
         tcp_addr : tcp_addr,
         tcp_port : tcp_port,
         slate_directory : slate_directory
@@ -55,8 +55,9 @@ fn main() {
     // Initilize RNG
     let mut rng = util::get_os_rng();
     // Initialize curve
-    let curve = util::get_secp256k1_curve();
-    
+    let btc_secp = util::get_secp256k1_curve();
+    let grin_secp = GrinSecp256k1::with_caps(ContextFlag::Commit);
+
     let matches = App::new("Grin Bitcoin Swaps")
                         .version("1.0")
                         .author("Jakob Abfalter <jakobabfalter@gmail.com>")
@@ -110,13 +111,8 @@ fn main() {
                                     .required(true)
                                     .takes_value(true)
                                 )
-                                .arg(Arg::with_name("secret")
-                                    .long("secret")
-                                    .required(true)
-                                    .takes_value(true)
-                                )
-                                .arg(Arg::with_name("pub_key")
-                                    .long("pub_key")
+                                .arg(Arg::with_name("sk")
+                                    .long("sk")
                                     .required(true)
                                     .takes_value(true)
                                 )
@@ -180,7 +176,7 @@ fn main() {
     else {
         let cmd = commands::parser::parse_arguments(matches)
             .expect("Failed to parse command line arguments");
-        let slate : SwapSlate = cmd.execute(&settings, &mut rng, &curve)
+        let slate : SwapSlate = cmd.execute(&settings, &mut rng, &btc_secp, &grin_secp)
             .expect("Command execution failed");
         
         swap::slate::write_slate_to_disk(&slate, &settings.slate_directory, true, true);

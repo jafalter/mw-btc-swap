@@ -1,4 +1,5 @@
 use crate::enums::SwapType;
+use bitcoin::{PrivateKey, PublicKey};
 use serde::{Serialize, Deserialize};
 
 use crate::enums::SwapStatus;
@@ -34,7 +35,8 @@ pub struct Meta {
 #[derive(Serialize, Deserialize)]
 pub struct MWPub {
     pub amount : u64,
-    pub timelock : u32,
+    pub timelock : u64,
+    pub lock_time : Option<i64>,
     pub swap_type : SwapType
 }
 
@@ -42,18 +44,31 @@ pub struct MWPub {
 pub struct MWPriv {
     pub inputs : Vec<MWCoin>,
     pub partial_key : u64,
+    pub shared_coin : Option<MWCoin>,
+    pub change_coin : Option<MWCoin>,
+    pub refund_coin : Option<MWCoin>,
+    pub swapped_coin : Option<MWCoin>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct BTCPub {
     pub amount : u64,
-    pub timelock : u32,
+    pub timelock : u64,
     pub swap_type : SwapType,
-    pub stmt : Option<String>
+    pub lock_time : Option<i64>,
+    pub pub_a : Option<String>,
+    pub pub_b : Option<String>,
+    pub pub_x : Option<String>,
+    pub lock : Option<BTCInput>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct BTCPriv {
     pub inputs : Vec<BTCInput>,
-    pub witness : u64
+    pub witness : u64,
+    pub sk : Option<String>,
+    pub x : Option<String>,
+    pub r_sk : Option<String>,
+    pub change : Option<BTCInput>,
+    pub swapped : Option<BTCInput>
 }

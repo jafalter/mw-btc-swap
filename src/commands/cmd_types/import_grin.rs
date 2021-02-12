@@ -6,7 +6,7 @@ use bitcoin::secp256k1::All;
 use crate::SwapSlate;
 use crate::Settings;
 use crate::commands::cmd_types::command::Command;
-
+use grin_util::secp::Secp256k1 as GrinSecp256k1;
 pub struct ImportGrin {
     swpid : u64,
     commitment : String,
@@ -26,7 +26,7 @@ impl ImportGrin {
 }
 
 impl Command for ImportGrin {
-    fn execute(&self, settings : &Settings, rng : &mut OsRng, curve : &Secp256k1<All>) -> Result<SwapSlate, &'static str> {
+    fn execute(&self, settings : &Settings, rng : &mut OsRng, btc_secp : &Secp256k1<All>, grin_secp : &GrinSecp256k1) -> Result<SwapSlate, String> {
         let mut slate : SwapSlate = read_slate_from_disk(self.swpid, &settings.slate_directory)
             .expect("Failed to read SwapSlate from file");
         slate.prv_slate.mw.inputs.push(MWCoin{

@@ -1,4 +1,7 @@
+use bitcoin::{PrivateKey, PublicKey, Script};
 use serde::{Serialize, Deserialize};
+
+use super::btcroutines::{serialize_priv_key, serialize_pub_key, serialize_script};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct BTCInput {
@@ -21,5 +24,20 @@ impl BTCInput {
             pub_key : pub_key,
             pub_script : pub_script,
         }
+    }
+
+    pub fn new2(txid : String, vout : u32, value : u64, secret: PrivateKey, pub_key : PublicKey, pub_script: Script) -> BTCInput {
+        BTCInput {
+            txid : txid,
+            vout : vout,
+            value : value,
+            secret : serialize_priv_key(&secret),
+            pub_key : serialize_pub_key(&pub_key),
+            pub_script : serialize_script(&pub_script)
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+        format!("txid: {}, vout: {}, value: {}, sk : {}, pk : {}, pubScript: {}", self.txid, self.vout, self.value, self.secret, self.pub_key, self.pub_script)
     }
 }

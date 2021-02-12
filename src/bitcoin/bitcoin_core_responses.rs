@@ -6,6 +6,12 @@ pub struct NetworkInfo {
     pub error : Option<Error>,
     pub id : String
 }
+#[derive(Serialize, Deserialize, Debug)]
+pub struct JsonRpcResponse<T> {
+    pub result : Option<T>,
+    pub error : Option<Error>,
+    pub id : String
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct NetworkInfoResult {
@@ -25,6 +31,13 @@ pub struct NetworkInfoResult {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ListUnspentResponse {
     pub result : Option<Vec<UTXO>>,
+    pub error : Option<Error>,
+    pub id : String
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct BlockCountResponse {
+    pub result : u64,
     pub error : Option<Error>,
     pub id : String
 }

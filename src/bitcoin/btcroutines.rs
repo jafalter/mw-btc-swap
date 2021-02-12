@@ -1,4 +1,4 @@
-use crate::{constants::SIGHASH_ALL, util};
+use crate::{constants::SIGHASH_ALL, grin::grin_tx::GrinTx, util};
 use bitcoin::{PubkeyHash, blockdata::opcodes::{self, all::{OP_ELSE, OP_ENDIF}}, consensus::encode::deserialize, consensus::encode::serialize_hex, secp256k1::Signature};
 use bitcoin::blockdata::opcodes::all::OP_CSV;
 use bitcoin::blockdata::opcodes::all::OP_CLTV;
@@ -8,7 +8,6 @@ use bitcoin::blockdata::script::Builder;
 use bitcoin::Transaction;
 use bitcoin::TxOut;
 use opcodes::{OP_FALSE, OP_TRUE, all::{OP_CHECKMULTISIG, OP_CHECKMULTISIGVERIFY, OP_CHECKSIG, OP_CHECKSIGVERIFY}};
-use serde_json::to_vec;
 use crate::constants::FFFFFFFF;
 use bitcoin::Script;
 use bitcoin::OutPoint;
@@ -27,6 +26,7 @@ use crate::constants::TEST_NET;
 use bitcoin::network::constants::Network;
 use bitcoin::hashes::sha256d::Hash;
 use std::str::FromStr;
+use grin_util::secp::SecretKey as GrinSecretKey;
 
 /// Creates a new secp256k1 private key used in bitcoin
 /// 
@@ -109,7 +109,7 @@ pub fn create_lock_transaction(recv_pk : PublicKey, pub_x : PublicKey, refund_pk
 ///
 /// * `recv_pk` key to be used for the p2pkh output
 /// * `input` the locked input to be spend
-/// * `amount` the amount for the output
+/// * `amount` the amount for the output in sats
 /// * `fee` the fee given to miners, note that amount + fee must equal the value of the locked coin
 pub fn create_spend_lock_transaction(recv_pk : &PublicKey, input : BTCInput, amount : u64, fee : u64, lock_time : u32) -> Result<Transaction,String> {
     let mut txinp : Vec<TxIn> = Vec::new();
@@ -401,6 +401,60 @@ pub fn deserialize_btc_tx(str_tx : &String) -> Transaction {
         .unwrap()
 }
 
+/// Serialize a Bitcoin PrivateKey to a string
+/// Returns a bitcoin private key in wif format
+///
+/// # Arguments
+///
+/// * `sk` the secret key to be serialized
+pub fn serialize_priv_key(sk : &PrivateKey) -> String {
+    sk.to_wif()
+}
+
+/// Deserializes a Bitcoin PrivateKey from a string
+/// Returns a deserialized PrivateKey object
+///
+/// # Arguments
+///
+/// * `sk` Secretkey in wif format
+pub fn deserialize_priv_key(sk: &String) -> PrivateKey {
+    PrivateKey::from_wif(&sk).unwrap()
+}
+
+/// Serialize a Bitcoin PublicKey to a string
+/// Returns a bitcoin public key serialized to a string
+///
+/// # Arguments
+///
+/// * `pk` the public key to be serialized
+pub fn serialize_pub_key(pk : &PublicKey) -> String {
+    pk.to_string()
+}
+
+/// Deserialize a Bitcoin PublicKey from a string
+/// Returns a Bitcoin public key object
+///
+/// # Arguments
+///
+/// * `str` serialized Bitcoin public key
+pub fn deserialize_pub_key(str : &String) -> PublicKey {
+    PublicKey::from_str(str).unwrap()
+}
+
+/// Convert from a Grin SecretKey to a Bitcoin PrivateKey
+/// Conversion is easy because they use the same elliptic curve
+///
+/// # Arguments
+///
+/// * `sk` the grin Secretkey
+pub fn private_key_from_grin_sk(sk : &GrinSecretKey) -> PrivateKey {
+    let btc_sk = SecretKey::from_slice(&sk.0).unwrap();
+    PrivateKey {
+        compressed : true,
+        network : Network::Testnet,
+        key : btc_sk
+    }
+}
 
 #[test]
 fn test_script_serialization() {

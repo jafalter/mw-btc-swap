@@ -6,7 +6,13 @@
         "port" : 18332,
         "id" : "mw-btc-swap"
     },
-    "mw_node_url" : "",
+    "grin" : {
+        "url" : "80.241.216.66",
+        "user" : "grin",
+        "pass" : "3iWINdv2xk7NEyavDOU8",
+        "port" : 13413,
+        "id" : "mw-btc-swap"
+    },
     "tcp_addr" : "127.0.0.1",
     "tcp_port" : "80",
     "slate_directory" : "slates"
