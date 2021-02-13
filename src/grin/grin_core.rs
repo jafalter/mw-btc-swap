@@ -5,6 +5,7 @@ use grin_core::core::transaction::OutputFeatures;
 use grin_core::core::{transaction::FeeFields, KernelFeatures};
 use grin_core::core::{Input, Inputs, Output, Transaction};
 use grin_core::libtx::tx_fee;
+use std::convert::TryFrom;
 use grin_keychain::{BlindSum, BlindingFactor, ExtKeychain, Identifier, Keychain};
 use grin_util::secp::pedersen::Commitment;
 use grin_util::secp::{
@@ -134,8 +135,6 @@ impl GrinCore {
             let mut blind_sum = BlindSum::new();
             let offset =
                 BlindingFactor::from_secret_key(create_secret_key(&mut self.rng, &self.secp));
-            let out_bf = BlindingFactor::from_secret_key(change_coin_key.clone());
-            blind_sum = blind_sum.add_blinding_factor(out_bf);
 
             let fee_field = FeeFields::new(0, fee).unwrap();
             let mut tx = Transaction::empty();
@@ -155,24 +154,24 @@ impl GrinCore {
             }
             let inputs = Inputs::FeaturesAndCommit(inp_vector);
             tx = Transaction::new(inputs, &tx.body.outputs, tx.body.kernels());
-            let final_bf = self
-                .chain
-                .blind_sum(&blind_sum)
-                .expect("Failure when calculating blinding factor sum");
 
             // Add changecoin output
-            let change_value = inpval - fund_value - fee;
+            let change_value = i64::try_from(inpval).unwrap() - i64::try_from(fund_value).unwrap() - i64::try_from(fee).unwrap();
+            let mut change_value_u64 = 0;
             // Only create an output coin if there is actually a change value
             let mut com: Option<Commitment> = None;
             if change_value > 0 {
+                let out_bf = BlindingFactor::from_secret_key(change_coin_key.clone());
+                blind_sum = blind_sum.add_blinding_factor(out_bf);
+                change_value_u64 = u64::try_from(change_value).unwrap();
                 println!("Creating change coin with value {}", change_value);
                 let commitment = self
                     .secp
-                    .commit(change_value, change_coin_key.clone())
+                    .commit(change_value_u64, change_coin_key.clone())
                     .expect("Failed to create change coin commitment");
                 // Compute bulletproof rangeproof
                 let proof = self.secp.bullet_proof(
-                    change_value,
+                    change_value_u64,
                     change_coin_key.clone(),
                     rew_nonce,
                     prf_nonce,
@@ -185,6 +184,10 @@ impl GrinCore {
             } else {
                 ();
             }
+            let final_bf = self
+                .chain
+                .blind_sum(&blind_sum)
+                .expect("Failure when calculating blinding factor sum");
             tx.offset = offset.clone();
             slate.tx = Some(tx);
             let final_key = final_bf
@@ -212,7 +215,7 @@ impl GrinCore {
             let change_coin_output = if com == None {
                 None
             } else {
-                Some(MWCoin::new(&com.unwrap(), &change_coin_key, change_value))
+                Some(MWCoin::new(&com.unwrap(), &change_coin_key, change_value_u64))
             };
 
             Ok(SpendCoinsResult {
@@ -762,11 +765,13 @@ impl GrinCore {
                     }
                 }
             }
-
+            let j = serde_json::to_string(&slate).unwrap();
+            println!("Final slate {}", j);
             slate
                 .fill_round_2(&self.chain, sec_key, sec_nonce)
                 .expect("Failed to complete round 2 on senders turn");
         }
+        
         if finalize {
             slate
                 .finalize(&self.chain)
@@ -858,10 +863,7 @@ mod test {
 
     use crate::{grin::grin_core::GrinCore, net::http::{HttpResponse, RequestFactory}, settings};
     use crate::grin::{grin_routines::*, grin_types::MWCoin};
-    use grin_core::{
-        core::{verifier_cache::LruVerifierCache, Weighting},
-        global::{set_local_chain_type, ChainTypes},
-    };
+    use grin_core::{core::{verifier_cache::LruVerifierCache, Weighting}, global::{set_local_chain_type, ChainTypes}, libtx::tx_fee};
     use grin_util::{secp::PublicKey, RwLock};
     use grin_wallet_libwallet::{Slate, Slatepacker, SlatepackerArgs};
 
@@ -1206,10 +1208,71 @@ mod test {
             blinding_factor: serialize_secret_key(&bf_b),
             value: input_val,
         };
-        let result1 = core.spend_coins(vec![coin_a], fund_value, 0, 2, 3).unwrap();
+        let result1 = core.spend_coins(vec![coin_a], fund_value, 711042, 2, 3).unwrap();
         let result2 = core
-            .d_spend_coins(vec![coin_b], result1.slate, fund_value, 0)
+            .d_spend_coins(vec![coin_b], result1.slate, fund_value, 711042)
             .unwrap();
+        let result3 = core.recv_coins(result2.slate, fund_value).unwrap();
+        let result4 = core
+            .fin_tx(
+                result3.slate,
+                &result1.sig_key,
+                &result1.sig_nonce,
+                false,
+                None,
+                None,
+            )
+            .unwrap();
+        let fin_slate = core
+            .fin_tx(
+                result4,
+                &result2.sig_key,
+                &result2.sig_nonce,
+                true,
+                None,
+                None,
+            )
+            .unwrap();
+        let ser = serde_json::to_string(&fin_slate).unwrap();
+        println!("final slate: {}", ser);
+    }
+
+    #[test]
+    fn test_full_flow_dspend_one_output() {
+        set_local_chain_type(ChainTypes::AutomatedTesting);
+        let fund_value = grin_to_nanogrin(2);
+        let fee = tx_fee(1, 1, 1);
+        let contents = fs::read_to_string("config/settings.json")
+            .unwrap();
+        let read_settings = settings::Settings::parse_json_string(&contents);
+        let factory = RequestFactory::new(None);
+        let mut core = GrinCore::new(read_settings.grin, factory);
+
+        // Create some valid input coin
+        let input_val = fund_value + fee;
+        let bf_a = create_secret_key(&mut core.rng, &core.secp);
+        let bf_b = create_secret_key(&mut core.rng, &core.secp);
+        let commit_a = core.secp.commit(input_val, bf_a.clone()).unwrap();
+        let commit_b = core.secp.commit(0, bf_b.clone()).unwrap();
+        let commit = core
+            .secp
+            .commit_sum(vec![commit_a, commit_b], vec![])
+            .unwrap();
+        let coin_a = MWCoin {
+            commitment: serialize_commitment(&commit),
+            blinding_factor: serialize_secret_key(&bf_a),
+            value: input_val,
+        };
+        let coin_b = MWCoin {
+            commitment: serialize_commitment(&commit),
+            blinding_factor: serialize_secret_key(&bf_b),
+            value: input_val,
+        };
+        let result1 = core.spend_coins(vec![coin_a], fund_value, 711042, 1, 3).unwrap();
+        let result2 = core
+            .d_spend_coins(vec![coin_b], result1.slate, fund_value, 711042)
+            .unwrap();
+        let fee : u64 = result2.slate.clone().fee_fields.into();
         let result3 = core.recv_coins(result2.slate, fund_value).unwrap();
         let result4 = core
             .fin_tx(

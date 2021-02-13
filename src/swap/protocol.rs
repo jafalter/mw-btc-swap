@@ -130,7 +130,7 @@ pub fn setup_phase_swap_mw(
 
             // Timelocked transaction spending back to Alice
             println!("Running protocol to spend shared Mimblewimble output back as a timelocked refund...");
-            let refund_result = grin_tx.dshared_inp_mw_tx_alice(
+            let refund_result = grin_tx.dshared_inp_mw_tx_bob(
                 shared_out_result.shared_coin.clone(), 
                 shared_out_result.shared_coin.clone().value, 
                 grin_lock_height, 
@@ -254,7 +254,7 @@ pub fn setup_phase_swap_btc(
     let shared_out_result = grin_tx.dshared_out_mw_tx_bob(slate.pub_slate.mw.amount, stream)?;
     slate.prv_slate.mw.shared_coin = Some(shared_out_result.shared_coin.clone());
     println!("Running protocol to refund shared Mimblewimble output...");
-    let shared_inp_result = grin_tx.dshared_inp_mw_tx_bob(
+    let shared_inp_result = grin_tx.dshared_inp_mw_tx_alice(
         shared_out_result.shared_coin.clone(), 
         shared_out_result.shared_coin.clone().value, 
         u64::try_from(lock_height_grin).unwrap(), 

@@ -228,6 +228,7 @@ impl GrinTx {
         let dspend_coins_result = self
             .core
             .spend_coins(vec![inp], fund_value, timelock, 1, 3)?;
+        
         // Send initial slate to Bob
         let ptx = serde_json::to_string(&dspend_coins_result.slate)
             .unwrap();
@@ -274,34 +275,41 @@ impl GrinTx {
         // Receive initial pre-transaction from alice
         let alice_msg = receive_msg(stream);
         let ptx = Slate::deserialize_upgrade(&alice_msg).unwrap();
-        // Add our spending info
-        let dspend_result = self
-            .core
-            .d_spend_coins(vec![inp], ptx, fund_value, timelock)?;
-        // Create out output coin
-        let recv_result = self.core.recv_coins(dspend_result.slate, fund_value)?;
-        // First round of the dfin_tx
-        let fin_result = self.core.fin_tx(
-            recv_result.slate,
-            &dspend_result.sig_key,
-            &dspend_result.sig_nonce,
-            false,
-            None,
-            None,
-        ).unwrap();
-        // Send the updated pre-tx to Alice
-        let ptx2 = serde_json::to_string(&fin_result)
-            .unwrap();
-        send_msg(stream, &ptx2);
+        let fee : u64 = ptx.fee_fields.into();
+        if fee > fund_value {
+            Err(String::from("Fee is bigger then fund_value, that won't work!"))
+        }
+        else {
+            println!("Fee for spending shared output {}", fee);
+            // Add our spending info
+            let dspend_result = self
+                .core
+                .d_spend_coins(vec![inp], ptx, fund_value, timelock)?;
+            // Create out output coin
+            let recv_result = self.core.recv_coins(dspend_result.slate, fund_value - fee)?;
+            // First round of the dfin_tx
+            let fin_result = self.core.fin_tx(
+                recv_result.slate,
+                &dspend_result.sig_key,
+                &dspend_result.sig_nonce,
+                false,
+                None,
+                None,
+            ).unwrap();
+            // Send the updated pre-tx to Alice
+            let ptx2 = serde_json::to_string(&fin_result)
+                .unwrap();
+            send_msg(stream, &ptx2);
 
-        // Read final tx from Alice
-        let alice_msg = receive_msg(stream);
-        let tx = Slate::deserialize_upgrade(&alice_msg)
-            .unwrap();
-        Ok(DBuildMWTxResult{
-            tx : tx,
-            coin : recv_result.output_coin
-        })
+            // Read final tx from Alice
+            let alice_msg = receive_msg(stream);
+            let tx = Slate::deserialize_upgrade(&alice_msg)
+                .unwrap();
+            Ok(DBuildMWTxResult{
+                tx : tx,
+                coin : recv_result.output_coin
+            })
+        }
     }
 
     /// The implementation of the Alice side of the dContractMWTX protocol from the thesis
