@@ -1,7 +1,7 @@
 Bob:
 
 ./mw-btc-swap init --from-currency BTC --to-currency GRIN --from-amount 1600 --to-amount 100000000 --timeout 600
-./mw-btc-swap import btc --swapid 13415674843628143771 --sk cPCZQ4dEGLYv2LYMJknWekPs9hs6pRw1fw8r2dACUCwndAUgAFXx --txid a26356f8803ef5c75d1816049dfa5a38ee325ce9423e8194478d639757930a7e --vout 1 --value 1808096 --pub_script 76a914218fd8c624d7b3eb7492a57b21ee5ec8672e942888ac
+./mw-btc-swap import btc --swapid 13415674843628143771 --sk cUm9kauTvokHzWosCJEufwNp7cywAeX9YJLkNqnySfu6JsQtPYT8 --txid aa582d730b213a408f9d4c59cf28e06fc16c2c02458d658a37a7c724ca058f80,  --vout 1 --value 1799696 --pub_script 76a91460efe22da573a3e1a8054060ecf4c22d8c72662688ac
 ./mw-btc-swap listen --swapid 13415674843628143771
 
 Alice:

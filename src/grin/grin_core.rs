@@ -1269,26 +1269,31 @@ mod test {
             value: input_val,
         };
         let result1 = core.spend_coins(vec![coin_a], fund_value, 711042, 1, 3).unwrap();
+        let slate1_str = serde_json::to_string(&result1.slate).unwrap();
+        let slate1 = Slate::deserialize_upgrade(&slate1_str).unwrap();
         let result2 = core
-            .d_spend_coins(vec![coin_b], result1.slate, fund_value, 711042)
+            .d_spend_coins(vec![coin_b], slate1, fund_value, 711042)
             .unwrap();
-        let fee : u64 = result2.slate.clone().fee_fields.into();
         let result3 = core.recv_coins(result2.slate, fund_value).unwrap();
         let result4 = core
             .fin_tx(
                 result3.slate,
-                &result1.sig_key,
-                &result1.sig_nonce,
+                &result2.sig_key,
+                &result2.sig_nonce,
                 false,
                 None,
                 None,
             )
             .unwrap();
+        let slate4_str = serde_json::to_string(&result4).unwrap();
+        let mut slate4 = Slate::deserialize_upgrade(&slate4_str).unwrap();
+        slate4.update_kernel().unwrap();
         let fin_slate = core
             .fin_tx(
-                result4,
-                &result2.sig_key,
-                &result2.sig_nonce,
+                slate4,
+
+                &result1.sig_key,
+                &result1.sig_nonce,
                 true,
                 None,
                 None,

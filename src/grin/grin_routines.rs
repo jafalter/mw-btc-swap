@@ -1,4 +1,4 @@
-use grin_core::core::FeeFields;
+use grin_core::{core::FeeFields, libtx::tx_fee};
 use grin_keychain::Identifier;
 use grin_util::secp::{Signature, pedersen::Commitment};
 use grin_util::secp::SecretKey;
@@ -361,6 +361,10 @@ pub fn mp_bullet_proof_fin(
         )
         .expect("Failed to finalize MP bulletproof");
     Ok(proof)
+}
+
+pub fn estimate_fees(num_inp : usize, num_out : usize, num_ker : usize) -> u64 {
+    tx_fee(num_inp, num_out, num_ker)
 }
 
 #[cfg(test)]

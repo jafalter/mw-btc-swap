@@ -1,4 +1,4 @@
-use crate::{bitcoin::{bitcoin_types::BTCInput, btcroutines::{create_private_key, create_spend_lock_transaction, deserialize_priv_key, deserialize_pub_key, deserialize_script, private_key_from_grin_sk, serialize_priv_key, serialize_pub_key, sign_lock_transaction_redeemer, sign_lock_transaction_refund, sign_p2pkh_transaction}}, grin::grin_routines::{deserialize_grin_pub_key, deserialize_secret_key, grin_pk_from_btc_pk, grin_sk_from_btc_sk}};
+use crate::{bitcoin::{bitcoin_types::BTCInput, btcroutines::{create_private_key, create_spend_lock_transaction, deserialize_priv_key, deserialize_pub_key, deserialize_script, private_key_from_grin_sk, serialize_priv_key, serialize_pub_key, sign_lock_transaction_redeemer, sign_lock_transaction_refund, sign_p2pkh_transaction}}, grin::grin_routines::{deserialize_grin_pub_key, deserialize_secret_key, estimate_fees, grin_pk_from_btc_pk, grin_sk_from_btc_sk}};
 use crate::net::tcp::send_msg;
 use crate::SwapSlate;
 use crate::{
@@ -127,12 +127,14 @@ pub fn setup_phase_swap_mw(
             slate.prv_slate.mw.shared_coin = Some(shared_out_result.shared_coin.clone());
             slate.prv_slate.mw.change_coin = shared_out_result.change_coin.clone();
             println!("Mimblewimble change coin: {}", slate.prv_slate.mw.change_coin.clone().unwrap().to_string());
+            let fee = estimate_fees(1, 1, 1);
+            let fund_value = shared_out_result.shared_coin.clone().value - fee;
 
             // Timelocked transaction spending back to Alice
             println!("Running protocol to spend shared Mimblewimble output back as a timelocked refund...");
             let refund_result = grin_tx.dshared_inp_mw_tx_bob(
                 shared_out_result.shared_coin.clone(), 
-                shared_out_result.shared_coin.clone().value, 
+                fund_value, 
                 grin_lock_height, 
                 stream)?;
             slate.prv_slate.mw.refund_coin = Some(refund_result.coin);
@@ -254,9 +256,11 @@ pub fn setup_phase_swap_btc(
     let shared_out_result = grin_tx.dshared_out_mw_tx_bob(slate.pub_slate.mw.amount, stream)?;
     slate.prv_slate.mw.shared_coin = Some(shared_out_result.shared_coin.clone());
     println!("Running protocol to refund shared Mimblewimble output...");
+    let fee = estimate_fees(1, 1, 1);
+    let fund_value = shared_out_result.shared_coin.clone().value - fee;
     let shared_inp_result = grin_tx.dshared_inp_mw_tx_alice(
         shared_out_result.shared_coin.clone(), 
-        shared_out_result.shared_coin.clone().value, 
+        fund_value, 
         u64::try_from(lock_height_grin).unwrap(), 
         stream)?;
 
