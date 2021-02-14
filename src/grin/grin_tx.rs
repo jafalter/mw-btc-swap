@@ -299,11 +299,12 @@ impl GrinTx {
 
         // Read final tx from Alice
         let alice_msg = receive_msg(stream);
-        let mut tx = Slate::deserialize_upgrade(&alice_msg)
+        let mut fin_slate = Slate::deserialize_upgrade(&alice_msg)
             .unwrap();
-        tx.update_kernel().unwrap();
+        fin_slate.update_kernel().unwrap();
+        fin_slate.finalize(&self.core.chain).unwrap();
         Ok(DBuildMWTxResult{
-            tx : tx,
+            tx : fin_slate,
             coin : recv_result.output_coin
         })
     }

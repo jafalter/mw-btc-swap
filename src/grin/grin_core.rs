@@ -1541,6 +1541,22 @@ mod test {
     }
 
     #[test]
+    fn test_tx_deserialization() {
+        set_local_chain_type(ChainTypes::AutomatedTesting);
+        let contents = fs::read_to_string("config/settings.json")
+            .unwrap();
+        let factory = RequestFactory::new(None);
+        let read_settings = settings::Settings::parse_json_string(&contents);
+        let mut core = GrinCore::new(read_settings.grin, factory);
+        let json = r#"{"ver":"4:3","id":"c880c23d-50df-43fa-ab45-17d6253a9ba3","sta":"S1","off":"659513de52602ae2160865ab18d3b1f07a5afba314ef2f5223b1540e0fc36053","num_parts":3,"amt":"87500000","fee":"12500000","feat":2,"sigs":[{"xs":"02992bb7e5b1df6e892829aec8b8ead73afa6f0748af920720b3a5e4543f7abd79","nonce":"031b570d25adeedf046f8814d2f8f490d29d1966183eb2241d0c8dc75cd99ff5ff","part":"fff59fd95cc78d0c1d24b23e1866199dd290f4f8d214886f04dfeead250d571b39c522ae636072867ebfefd41a0ac3be1b0a2ad913c0188d804b6ad3828d94a7"},{"xs":"02670392c6b08621c81a1432d18e10f87ff60306451ed8704cdd5f4396b9f28645","nonce":"030491c60966dde7eb3ee21c0f5c263cfde8038389bddcb70603f52fb346c2fa48","part":"48fac246b32ff50306b7dcbd898303e8fd3c265c0f1ce23eebe7dd6609c691046cb3398e2ce5a9ea4d358ebfce904e2d7a780391828a33ccc96bb2f72dfc0e27"},{"xs":"024c2cdef09fd7a9231263b593696de798e76857e9ad3061da522d852f78ff23bf","nonce":"02165e981a6428207e70eb86dda47fe73d3e14a4467115f3d55e221262bef72f34","part":"342ff7be6212225ed5f3157146a4143e3de77fa4dd86eb707e2028641a985e169a8ccdd9f407b7fdf3ad10db5db9f5532e8f7aaa66efefeed9910fea3a032fc6"}],"coms":[{"c":"08ca68a97be6bcad3261eb4f629fd812a92c49a0f49782fdb5a9ee3312ea021e07"},{"c":"09fd68cde4bdbfea94d50631b2e588eb4b5e6d03cc2567aba24d9c53f24bfd8579","p":"18335bdd5bab540f5269d977cd24777f836ccf47a073d68ece68ef2108ec956eed9368ae45f26117c2be51f30ab466ee638e29e6624dc2768de7dcf454878a330d30057ab6b14753901b9634c9ea1197fcf83f8e6c4107a7dac537f0a38b634693a91292b617fa8b12832eeef8118b36bbd59d9ff658e31266989a874698c63cdd74709f18d6051c4bc90189d4adcee10835faecc6a17e2d7e467874289c1433b2405cbfbfc6b400c5a018fda2ecc47b9afc67070cae75476e493f00619f89d12483acacf9435b806b8d6b15e4f1e339b3ec24d4828b47a54c55d179ed3a77be12ec7db096fb656a77400e560d183d9696856acf4c81ffdb832a19b7670b9ead46b908a4438ac9fb86945cdb818c4bbb6c744fd3d09404fb7bdb5641d3e1976f22316e2f7b1ddf43f6ac3908d988d4aeded248776a36f491860b97e783ad35501733cf409e97bd8f70d0f3392a174d66dfb433826b6211ce646442b1f7104a85ff6c0176cb0bd3b3dea4258a2680ed3ab60e3669d0d8931adcd35426c092d944c5eda4fd2876ee687686278cbd8f4331da94b1b7d9a4abdfe8f08b374e421e5e98ea63d17486a433c0092d699ca593c1f68f7955eab8748606395f3b0c37e666a3af0d6ed185be39528e7155af715427cdab610eab4abf021c3c31f50dd41be1ec1dc8338267fb3b590680a1968a533897a7a3d903b9f497d37544465feda8b258c25cbdbe2f7575617642df37a488a30f5b2a6154869f41fabc2ade3627e3403274d38c093b8c9eb1510edd12d4f3df6c94018ca82996ef3ffca8731477da47d192184807266d139f02dd19a110931c4608ca61c59308e22273b2fefe3baa6364bd89f5bba2a878843447dd528cf996189170d5839d62901940605ce1adb3d289380f318075a144c4900cd3e8db065d6bf5d71e3958bc21c41b7b6b237b6138a71807"}],"feat_args":{"lock_hgt":712110}}"#;
+        let mut slate = Slate::deserialize_upgrade(&json).unwrap();
+        slate.update_kernel().unwrap();
+        slate.finalize(&core.chain).unwrap();
+        let tx = serde_json::to_string(&slate.tx.unwrap()).unwrap();
+        println!("{}", tx);
+    }
+
+    #[test]
     #[should_panic]
     fn test_push_invalid_transaction() {
         set_local_chain_type(ChainTypes::AutomatedTesting);
