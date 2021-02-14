@@ -23,7 +23,7 @@ pub struct JsonRPCResponse<T> {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Error {
-    pub code : u64,
+    pub code : i64,
     pub message : String
 }
 

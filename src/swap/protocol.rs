@@ -127,8 +127,10 @@ pub fn setup_phase_swap_mw(
             slate.prv_slate.mw.shared_coin = Some(shared_out_result.shared_coin.clone());
             slate.prv_slate.mw.change_coin = shared_out_result.change_coin.clone();
             println!("Mimblewimble change coin: {}", slate.prv_slate.mw.change_coin.clone().unwrap().to_string());
+            println!("Share coin mw side: {}", shared_out_result.shared_coin.to_string());
             let fee = estimate_fees(1, 1, 1);
             let fund_value = shared_out_result.shared_coin.clone().value - fee;
+            println!("Refund tx fund value: {}", fund_value);
 
             // Timelocked transaction spending back to Alice
             println!("Running protocol to spend shared Mimblewimble output back as a timelocked refund...");
@@ -255,9 +257,12 @@ pub fn setup_phase_swap_btc(
     println!("Running protocol to create shared Mimblewimble output...");
     let shared_out_result = grin_tx.dshared_out_mw_tx_bob(slate.pub_slate.mw.amount, stream)?;
     slate.prv_slate.mw.shared_coin = Some(shared_out_result.shared_coin.clone());
+    println!("Shared coin on BTC side: {}", shared_out_result.shared_coin.to_string());
+
     println!("Running protocol to refund shared Mimblewimble output...");
     let fee = estimate_fees(1, 1, 1);
     let fund_value = shared_out_result.shared_coin.clone().value - fee;
+    println!("Fund value of refund transaction: {}", fund_value);
     let shared_inp_result = grin_tx.dshared_inp_mw_tx_alice(
         shared_out_result.shared_coin.clone(), 
         fund_value, 

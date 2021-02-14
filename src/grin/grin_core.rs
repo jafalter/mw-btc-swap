@@ -618,7 +618,7 @@ impl GrinCore {
             .fill_round_2(&self.chain, &out_coin_blind, &sig_nonce)
             .expect("Failed to run fill_round_2 on drecv_coins_r2");
 
-        let coin = MWCoin::new(&com, &out_coin_blind, fund_value);
+        let coin = MWCoin::new(&prf_ctx.commit.clone(), &out_coin_blind, fund_value);
         Ok((
             RecvCoinsResult {
                 slate: slate,
@@ -828,14 +828,15 @@ impl GrinCore {
     ///
     /// * `tx` the transaction to broadcast
     pub fn push_transaction(&mut self, tx : Transaction) -> Result<(), String> {
-        let str_tx = serde_json::to_string(&tx).unwrap();
         let mut params : Vec<JsonRpcParam> = Vec::new();
-        params.push(JsonRpcParam::String(str_tx));
+        params.push(JsonRpcParam::Tx(tx));
+        params.push(JsonRpcParam::Bool(true));
         let rpc = JsonRpc::new(String::from("2.0"), self.settings.id.clone(), String::from("push_transaction"), params);
-        let url = format!("http://{}:{}", self.settings.url, self.settings.port);
+        let url = format!("http://{}:{}/v2/foreign", self.settings.url, self.settings.port);
         let req = self.req_factory.new_json_rpc_request(url, rpc, self.settings.user.clone(), self.settings.pass.clone());
         match req.execute() {
             Ok(x) => {
+                println!("Respone from Grin node {}", &x.content);
                 let parsed : JsonRPCResponse<PushTransactionResult> = serde_json::from_str(&x.content)
                     .unwrap();
                 if parsed.error.is_some() {
