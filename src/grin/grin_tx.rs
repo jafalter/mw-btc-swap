@@ -23,7 +23,7 @@ pub struct DSharedOutMwTxResult {
 
 pub struct ContractMwResult {
     pub tx : Slate,
-    pub coin : MWCoin,
+    pub coin : Option<MWCoin>,
     pub x : SecretKey
 }
 
@@ -330,7 +330,7 @@ impl GrinTx {
     ) -> Result<ContractMwResult, String> {
         let dspend_coins_result = self
             .core
-            .spend_coins(vec![inp], fund_value, timelock, 2, 3)?;
+            .spend_coins(vec![inp], fund_value, timelock, 1, 3)?;
         let ptx = serde_json::to_string(&dspend_coins_result.slate)
             .unwrap();
         // Send initial slate to Bob
@@ -391,7 +391,7 @@ impl GrinTx {
 
         Ok(ContractMwResult{
             tx : final_slate,
-            coin : dspend_coins_result.change_coin.unwrap(),
+            coin : dspend_coins_result.change_coin,
             x : x
         })
     }
@@ -441,7 +441,7 @@ impl GrinTx {
         send_msg(stream, &tx);
         Ok(ContractMwResult{
             tx : fin_tx_result,
-            coin : rec_coins_result.output_coin,
+            coin : Some(rec_coins_result.output_coin),
             x : x
         })
     }

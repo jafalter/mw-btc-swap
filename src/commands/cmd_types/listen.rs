@@ -50,7 +50,7 @@ impl Command for Listen {
                 value = value + inp.value
             }
         }
-        if value < from_amount {
+        if swp_slate.pub_slate.status != SwapStatus::SETUP && value < from_amount {
             Err(String::from("Not enough value in inputs, please import more Coins"))
         }
         else {    

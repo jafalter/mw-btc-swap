@@ -70,7 +70,8 @@ impl Command for Init {
                 x : None,
                 r_sk : None,
                 change : None,
-                swapped : None
+                swapped : None,
+                lock : None
             };
             let prv_slate = SwapSlatePriv{
                 mw : mwpriv,
@@ -88,8 +89,7 @@ impl Command for Init {
                 swap_type : if self.from == Currency::BTC { SwapType::OFFERED } else { SwapType::REQUESTED },
                 pub_a : None,
                 pub_b : None,
-                pub_x : None,
-                lock : None
+                pub_x : None
             };
             let mwpub = MWPub {
                 amount : mw_amount,

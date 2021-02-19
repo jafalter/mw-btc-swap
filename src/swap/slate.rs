@@ -119,7 +119,8 @@ pub fn create_priv_from_pub(id : u64, directory : &str) -> Result<SwapSlate, &'s
             x : None,
             r_sk : None,
             swapped : None,
-            change : None
+            change : None,
+            lock : None
         };
         let prv_slate = SwapSlatePriv{
             mw : mwpriv,

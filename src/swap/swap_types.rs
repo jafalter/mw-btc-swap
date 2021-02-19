@@ -60,8 +60,7 @@ pub struct BTCPub {
     pub lock_time : Option<i64>,
     pub pub_a : Option<String>,
     pub pub_b : Option<String>,
-    pub pub_x : Option<String>,
-    pub lock : Option<BTCInput>,
+    pub pub_x : Option<String>
 }
 
 #[derive(Serialize, Deserialize)]
@@ -72,5 +71,6 @@ pub struct BTCPriv {
     pub x : Option<String>,
     pub r_sk : Option<String>,
     pub change : Option<BTCInput>,
-    pub swapped : Option<BTCInput>
+    pub swapped : Option<BTCInput>,
+    pub lock : Option<BTCInput>,
 }

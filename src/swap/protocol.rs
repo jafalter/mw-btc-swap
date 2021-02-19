@@ -109,7 +109,7 @@ pub fn setup_phase_swap_mw(
             Err(String::from("Failed to verify that btc funds are correctly locked"))
         } else {
             println!("Successfully verified the locked funds!");
-            slate.pub_slate.btc.lock = Some(BTCInput::new2(txid, 0, slate.pub_slate.btc.amount, sk_a, pub_a, pub_script));
+            slate.prv_slate.btc.lock = Some(BTCInput::new2(txid, 0, slate.pub_slate.btc.amount, sk_a, pub_a, pub_script));
             let grin_height = grin_core.get_block_height().unwrap();
             let grin_lock_height = grin_height + slate.pub_slate.mw.timelock;
             slate.pub_slate.mw.lock_time = Some(i64::try_from(grin_lock_height).unwrap());
@@ -247,7 +247,7 @@ pub fn setup_phase_swap_btc(
     // Send the address, txid over to Alice and let her verify the locked funds
     send_msg(stream, &address.to_string());
     send_msg(stream, &txid);
-    slate.pub_slate.btc.lock = Some(BTCInput::new2(txid, 0, btc_amount,  sk_b, pub_b, pub_script));
+    slate.prv_slate.btc.lock = Some(BTCInput::new2(txid, 0, btc_amount,  sk_b, pub_b, pub_script));
 
     // Receive the grin side lock height from alice
     msg_alice = receive_msg(stream);
@@ -303,7 +303,9 @@ pub fn exec_phase_swap_mw(
     let pub_x_grin = grin_pk_from_btc_pk(&pub_x, grin_secp);
 
     println!("Running Mimblewimble Contract transaction protocol");
-    let result = grin_tx.dcontract_mw_tx_alice(shared_coin, value, 0, pub_x_grin, stream)?;
+    let fee = estimate_fees(1, 1, 1);
+    let fund_value = value - fee;
+    let result = grin_tx.dcontract_mw_tx_alice(shared_coin, fund_value, 0, pub_x_grin, stream)?;
     
     let sk_a2 = create_private_key(rng);
     let pub_a2 = PublicKey::from_private_key(btc_secp, &sk_a2);
@@ -318,7 +320,7 @@ pub fn exec_phase_swap_mw(
 
     println!("Creating Bitcoin redeem transaction");
     // Now we can spent the Bitcoin
-    let redeem_tx = create_spend_lock_transaction(&pub_a2, slate.pub_slate.btc.lock.clone().unwrap(), slate.pub_slate.btc.amount, BTC_FEE, 0)?;
+    let redeem_tx = create_spend_lock_transaction(&pub_a2, slate.prv_slate.btc.lock.clone().unwrap(), slate.pub_slate.btc.amount, BTC_FEE, 0)?;
     let lock_script = get_lock_pub_script(pub_a, pub_x, pub_b, slate.pub_slate.btc.lock_time.unwrap(), false);
     let signed_redeem_tx = sign_lock_transaction_redeemer(redeem_tx, 0, lock_script, sk_a, x_btc, btc_secp);
     let o = signed_redeem_tx.output.get(0).unwrap();
@@ -361,8 +363,10 @@ pub fn exec_phase_swap_btc(
     let value = shared_coin.value;
     let x = deserialize_priv_key(&slate.prv_slate.btc.x.clone().unwrap());
     let x_grin = grin_sk_from_btc_sk(&x, secp);
-    let result = grin_tx.dcontract_mw_tx_bob(shared_coin, value, 0, x_grin, stream)?;
-    slate.prv_slate.mw.swapped_coin = Some(result.coin);
+    let fee = estimate_fees(1, 1, 1);
+    let fund_value = value - fee;
+    let result = grin_tx.dcontract_mw_tx_bob(shared_coin, fund_value, 0, x_grin, stream)?;
+    slate.prv_slate.mw.swapped_coin = result.coin;
     grin_core.push_transaction(result.tx.tx.unwrap())?;
     slate.pub_slate.status = crate::enums::SwapStatus::FINISHED;
 
