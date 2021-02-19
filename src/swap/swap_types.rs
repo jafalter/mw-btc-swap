@@ -1,5 +1,6 @@
 use crate::enums::SwapType;
 use bitcoin::{PrivateKey, PublicKey};
+use grin_core::core::Transaction;
 use serde::{Serialize, Deserialize};
 
 use crate::enums::SwapStatus;
@@ -48,6 +49,7 @@ pub struct MWPriv {
     pub change_coin : Option<MWCoin>,
     pub refund_coin : Option<MWCoin>,
     pub swapped_coin : Option<MWCoin>,
+    pub refund_tx : Option<Transaction>
 }
 
 #[derive(Serialize, Deserialize)]

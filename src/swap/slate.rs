@@ -109,7 +109,8 @@ pub fn create_priv_from_pub(id : u64, directory : &str) -> Result<SwapSlate, &'s
             shared_coin : None,
             refund_coin : None,
             swapped_coin : None,
-            change_coin : None
+            change_coin : None,
+            refund_tx : None
         };        
         let btcpriv = BTCPriv{
             inputs : Vec::new(),

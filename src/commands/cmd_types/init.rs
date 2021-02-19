@@ -60,7 +60,8 @@ impl Command for Init {
                 shared_coin : None,
                 refund_coin : None,
                 swapped_coin : None,
-                change_coin : None
+                change_coin : None,
+                refund_tx : None
             };        
             let btcpriv = BTCPriv{
                 inputs : Vec::new(),

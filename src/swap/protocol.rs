@@ -139,11 +139,11 @@ pub fn setup_phase_swap_mw(
                 fund_value, 
                 grin_lock_height, 
                 stream)?;
-            slate.prv_slate.mw.refund_coin = Some(refund_result.coin);
+            slate.prv_slate.mw.refund_coin = refund_result.coin;
+            slate.prv_slate.mw.refund_tx = refund_result.tx.tx.clone();
 
-            // publish the two transactions
+            // publish the funding transactions
             grin_core.push_transaction(shared_out_result.tx.tx.unwrap())?;
-            grin_core.push_transaction(refund_result.tx.tx.unwrap())?;
 
             println!("Successfully finished setup protocol on Mimblewimble side");
 

@@ -12,7 +12,7 @@ pub struct GrinTx {
 
 pub struct DBuildMWTxResult {
     pub tx: Slate,
-    pub coin: MWCoin,
+    pub coin: Option<MWCoin>,
 }
 
 pub struct DSharedOutMwTxResult {
@@ -71,7 +71,7 @@ impl GrinTx {
         send_msg(stream, &tx);
         Ok(DBuildMWTxResult {
             tx: fin,
-            coin: spend_coins_result.change_coin.unwrap(),
+            coin: spend_coins_result.change_coin,
         })
     }
 
@@ -100,7 +100,7 @@ impl GrinTx {
         let tx = Slate::deserialize_upgrade(&alice_msg).unwrap();
         Ok(DBuildMWTxResult {
             tx: tx,
-            coin: ptx2.output_coin,
+            coin: Some(ptx2.output_coin),
         })
     }
 
@@ -252,7 +252,7 @@ impl GrinTx {
         send_msg(stream, &tx);
         Ok(DBuildMWTxResult {
             tx: fin_slate,
-            coin: dspend_coins_result.change_coin.unwrap(),
+            coin: dspend_coins_result.change_coin,
         })
     }
 
@@ -305,7 +305,7 @@ impl GrinTx {
         fin_slate.finalize(&self.core.chain).unwrap();
         Ok(DBuildMWTxResult{
             tx : fin_slate,
-            coin : recv_result.output_coin
+            coin : Some(recv_result.output_coin)
         })
     }
 

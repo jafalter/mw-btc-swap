@@ -1430,7 +1430,7 @@ mod test {
         let factory = RequestFactory::new(None);
         let mut core = GrinCore::new(read_settings.grin, factory);
         let slatepack_str = String::from(
-            r#"BEGINSLATEPACK. 2ggbW8PZi5GV1Y5 KTMXbjZUbLTxNDx c2uEp9Jg8F9Qq5i z34zazcL2tA6tHb bqQ3PdSnpEoGEBu fYdLDupQt7psw7q CvC4z7a2c9hXHNa dK4v3YHjKJu6csy LfUYQyQZR5NrtN6 XXDeeEnJyG4xxmZ J2uKaWM4wPBgFsD 6kNN7LbZWKASmMu mLDEJuBhUk1M3Jg 8PQnLvc1UMppzeE jecBThZMWjckUZM yAPzyUqxJSjfqcA BDNfPaFLHbrjCW8 uakuAubanRcXVon tSXn54ikJHd4FdH sZWbnzxu7j2ddG8 J5txMJas. ENDSLATEPACK."#,
+            r#"BEGINSLATEPACK. YKxdYH2hfeRPMxj s6bmkrFVkFsA3sK onQ7aCoEkD9q5M3 TCgRAhhdEjhMdcK HEYn9EBWqCF7WWn AwseQPCMYeKuiW1 8tUbRPHYvv5qiTz 8UnGoSAThv38ais 2kTmoANwCjMujSD 3DSMBrB9EJhoA88 HuEsqKdJqv5bLvC Dcyj63B2JVP5WCR zd5t73y3zGPf4Ew yybS52PZyukcyRn DrhDTJjAmN38GJg t3SiLTNHnhYdvkr kS4GKnHrmQeq4o1 Z9HL1Y9jbzUvC5Q 8TfRpejKQzURNHR CC4Cj9Vax9Przoh a3jwPLB. ENDSLATEPACK."#,
         );
         let packer = Slatepacker::new(SlatepackerArgs {
             sender: None,
