@@ -867,6 +867,7 @@ mod test {
     use grin_core::{core::{verifier_cache::LruVerifierCache, Weighting}, global::{set_local_chain_type, ChainTypes}, libtx::tx_fee};
     use grin_util::{secp::PublicKey, RwLock};
     use grin_wallet_libwallet::{Slate, Slatepacker, SlatepackerArgs};
+    use crate::bitcoin::btcroutines::{deserialize_priv_key, private_key_from_grin_sk};
 
     #[test]
     fn test_spend_coins() {
@@ -1389,14 +1390,15 @@ mod test {
             .d_spend_coins(vec![coin_b], result1.slate, fund_value, 0)
             .unwrap();
         // Hide a secret x
-        let x = create_secret_key(&mut core.rng, &core.secp);
+        let x_btc = deserialize_priv_key(&String::from("cNScs27pnjxb4GbVbX2124pPUVSPLbjzDtV1frYFZhh9k4zr6uN9"));
+        let x = grin_sk_from_btc_sk(&x_btc, &core.secp);
         let pub_x = PublicKey::from_secret_key(&core.secp, &x).unwrap();
         let result3 = core
             .apt_recv_coins(result2.slate, fund_value, x.clone())
             .unwrap();
         let result4 = core
             .fin_tx(
-                result3.slate,
+                result3.slate.clone(),
                 &result1.sig_key,
                 &result1.sig_nonce,
                 false,
@@ -1416,9 +1418,13 @@ mod test {
             .unwrap();
         let ser = serde_json::to_string(&fin_slate).unwrap();
         println!("final slate: {}", ser);
+        let bob_recv_sig = fin_slate.participant_data.get(2).unwrap().part_sig.unwrap();
+        let bob_apt_sig = result3.slate.participant_data.get(2).unwrap().part_sig.unwrap();
+
         // Extract x from final transaction
-        let x_2 = core.ext_witness(result3.prt_sig.1, result3.prt_sig.0);
-        assert_eq!(x, x_2);
+        let x_2 = core.ext_witness(bob_recv_sig, bob_apt_sig);
+        let x_2_btc = private_key_from_grin_sk(&x_2);
+        assert_eq!(x_btc, x_2_btc);
     }
 
     #[test]

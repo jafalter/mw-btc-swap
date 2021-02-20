@@ -368,26 +368,14 @@ impl GrinTx {
         let bob_msg2 = receive_msg(stream);
         let final_slate = Slate::deserialize_upgrade(&bob_msg2)
             .unwrap();
-        let fin_sig = final_slate.tx.clone().unwrap().kernels()[0].excess_sig;
+        let sig_bob = final_slate
+            .participant_data
+            .get(2)
+            .unwrap()
+            .part_sig
+            .unwrap();
 
-        // Finally we extract x from the signatures
-        let s_fin = sig_extract_s(&fin_sig, &self.core.secp);
-        let s_bob_apt = sig_extract_s(&apt_sig_bob, &self.core.secp);
-        let s_alice = sig_extract_s(&sig_alice, &self.core.secp);
-        let mut s_alice_neg = s_alice.clone();
-        s_alice_neg.neg_assign(&self.core.secp).unwrap();
-        let mut s_bob = s_fin.clone();
-        s_bob.add_assign(
-            &self.core.secp, 
-            &s_alice_neg
-        ).unwrap();
-        let mut s_bob_neg = s_bob.clone();
-        s_bob_neg.neg_assign(&self.core.secp).unwrap();
-        let mut x = s_bob_apt.clone();
-        x.add_assign(
-            &self.core.secp,
-            &s_bob_neg 
-        ).unwrap();
+        let x = self.core.ext_witness(sig_bob, apt_sig_bob);
 
         Ok(ContractMwResult{
             tx : final_slate,

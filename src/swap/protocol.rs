@@ -315,6 +315,7 @@ pub fn exec_phase_swap_mw(
     let pub_x = deserialize_pub_key(&slate.pub_slate.btc.pub_x.clone().unwrap());
 
     let x_btc = private_key_from_grin_sk(&result.x);
+    println!("Extracted x value: {}", serialize_priv_key(&x_btc));
 
     let sk_a = deserialize_priv_key(&slate.prv_slate.btc.sk.clone().unwrap());
 
