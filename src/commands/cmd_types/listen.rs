@@ -1,4 +1,4 @@
-use crate::{bitcoin::bitcoin_core::BitcoinCore, grin::{grin_core::GrinCore, grin_tx::GrinTx}, net::http::RequestFactory, swap::{protocol::setup_phase_swap_mw, slate}};
+use crate::{bitcoin::bitcoin_core::BitcoinCore, enums::SwapStatus, grin::{grin_core::GrinCore, grin_tx::GrinTx}, net::http::RequestFactory, swap::{protocol::{exec_phase_swap_btc, exec_phase_swap_mw, setup_phase_swap_mw}, slate}};
 use crate::swap::protocol::setup_phase_swap_btc;
 use crate::net::tcp::send_msg;
 use crate::swap::slate::get_slate_checksum;
@@ -50,7 +50,7 @@ impl Command for Listen {
                 value = value + inp.value
             }
         }
-        if value < from_amount {
+        if swp_slate.pub_slate.status != SwapStatus::SETUP && value < from_amount {
             Err(String::from("Not enough value in inputs, please import more Coins"))
         }
         else {    
@@ -74,15 +74,31 @@ impl Command for Listen {
                     println!("Swap Checksum matched");
                     // Send back OK message
                     send_msg(&mut stream, &String::from("OK"));
-                    if swp_slate.pub_slate.btc.swap_type == SwapType::OFFERED {
-                        setup_phase_swap_btc(&mut swp_slate, &mut stream, rng, &btc_secp, &mut grin_core, &mut btc_core, &mut grin_tx)?;
-                        setup_phase_swap_btc(&mut swp_slate, &mut stream, rng, btc_secp, &mut grin_core, &mut btc_core, &mut grin_tx)?;
-                        break;
+                    if swp_slate.pub_slate.status == SwapStatus::INITIALIZED {
+                        // Run the setup phase
+                        if swp_slate.pub_slate.btc.swap_type == SwapType::OFFERED {
+                            setup_phase_swap_btc(&mut swp_slate, &mut stream, rng, &btc_secp, &mut grin_core, &mut btc_core, &mut grin_tx)?;
+                            break;
+                        }
+                        else {
+                            setup_phase_swap_mw(&mut swp_slate, &mut stream, rng, &btc_secp, &mut grin_core, &mut btc_core, &mut grin_tx)?;
+                            break;
+                        }
                     }
-                    else {
-                        setup_phase_swap_mw(&mut swp_slate, &mut stream, rng, &btc_secp, &mut grin_core, &mut btc_core, &mut grin_tx)?;
-                        setup_phase_swap_btc(&mut swp_slate, &mut stream, rng, btc_secp, &mut grin_core, &mut btc_core, &mut grin_tx)?;
-                        break;
+                    else if swp_slate.pub_slate.status == SwapStatus::SETUP {
+                        let msg = receive_msg(&mut stream);
+                        if msg == "EXECUTE" {
+                            if swp_slate.pub_slate.btc.swap_type == SwapType::OFFERED {
+                                exec_phase_swap_btc(&mut swp_slate, &mut stream, &mut btc_core, &mut grin_core, &mut grin_tx, grin_secp)?;
+                                break;
+                            }
+                            else {
+                                exec_phase_swap_mw(&mut swp_slate, &mut stream, &mut btc_core, rng, &mut grin_tx, grin_secp, btc_secp)?;
+                                break;
+                            }
+                        } else {
+                            // TODO implement cancelling
+                        }
                     }
                 }
                 else {

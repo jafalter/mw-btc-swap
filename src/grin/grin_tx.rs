@@ -12,7 +12,7 @@ pub struct GrinTx {
 
 pub struct DBuildMWTxResult {
     pub tx: Slate,
-    pub coin: MWCoin,
+    pub coin: Option<MWCoin>,
 }
 
 pub struct DSharedOutMwTxResult {
@@ -23,7 +23,7 @@ pub struct DSharedOutMwTxResult {
 
 pub struct ContractMwResult {
     pub tx : Slate,
-    pub coin : MWCoin,
+    pub coin : Option<MWCoin>,
     pub x : SecretKey
 }
 
@@ -71,7 +71,7 @@ impl GrinTx {
         send_msg(stream, &tx);
         Ok(DBuildMWTxResult {
             tx: fin,
-            coin: spend_coins_result.change_coin.unwrap(),
+            coin: spend_coins_result.change_coin,
         })
     }
 
@@ -100,7 +100,7 @@ impl GrinTx {
         let tx = Slate::deserialize_upgrade(&alice_msg).unwrap();
         Ok(DBuildMWTxResult {
             tx: tx,
-            coin: ptx2.output_coin,
+            coin: Some(ptx2.output_coin),
         })
     }
 
@@ -227,14 +227,16 @@ impl GrinTx {
     ) -> Result<DBuildMWTxResult, String> {
         let dspend_coins_result = self
             .core
-            .spend_coins(vec![inp], fund_value, timelock, 2, 3)?;
+            .spend_coins(vec![inp], fund_value, timelock, 1, 3)?;
+        
         // Send initial slate to Bob
         let ptx = serde_json::to_string(&dspend_coins_result.slate)
             .unwrap();
         send_msg(stream, &ptx);
         // Receive updated pre-transaction from Bob
         let bob_msg = receive_msg(stream);
-        let ptx2 = Slate::deserialize_upgrade(&bob_msg).unwrap();
+        let mut ptx2 = Slate::deserialize_upgrade(&bob_msg).unwrap();
+        ptx2.update_kernel().unwrap();
         // Second round of finalize tx
         let fin_slate = self.core.fin_tx(
             ptx2,
@@ -250,7 +252,7 @@ impl GrinTx {
         send_msg(stream, &tx);
         Ok(DBuildMWTxResult {
             tx: fin_slate,
-            coin: dspend_coins_result.change_coin.unwrap(),
+            coin: dspend_coins_result.change_coin,
         })
     }
 
@@ -274,6 +276,7 @@ impl GrinTx {
         // Receive initial pre-transaction from alice
         let alice_msg = receive_msg(stream);
         let ptx = Slate::deserialize_upgrade(&alice_msg).unwrap();
+
         // Add our spending info
         let dspend_result = self
             .core
@@ -288,7 +291,7 @@ impl GrinTx {
             false,
             None,
             None,
-        );
+        ).unwrap();
         // Send the updated pre-tx to Alice
         let ptx2 = serde_json::to_string(&fin_result)
             .unwrap();
@@ -296,11 +299,13 @@ impl GrinTx {
 
         // Read final tx from Alice
         let alice_msg = receive_msg(stream);
-        let tx = Slate::deserialize_upgrade(&alice_msg)
+        let mut fin_slate = Slate::deserialize_upgrade(&alice_msg)
             .unwrap();
+        fin_slate.update_kernel().unwrap();
+        fin_slate.finalize(&self.core.chain).unwrap();
         Ok(DBuildMWTxResult{
-            tx : tx,
-            coin : recv_result.output_coin
+            tx : fin_slate,
+            coin : Some(recv_result.output_coin)
         })
     }
 
@@ -325,7 +330,7 @@ impl GrinTx {
     ) -> Result<ContractMwResult, String> {
         let dspend_coins_result = self
             .core
-            .spend_coins(vec![inp], fund_value, timelock, 2, 3)?;
+            .spend_coins(vec![inp], fund_value, timelock, 1, 3)?;
         let ptx = serde_json::to_string(&dspend_coins_result.slate)
             .unwrap();
         // Send initial slate to Bob
@@ -363,30 +368,18 @@ impl GrinTx {
         let bob_msg2 = receive_msg(stream);
         let final_slate = Slate::deserialize_upgrade(&bob_msg2)
             .unwrap();
-        let fin_sig = final_slate.tx.clone().unwrap().kernels()[0].excess_sig;
+        let sig_bob = final_slate
+            .participant_data
+            .get(2)
+            .unwrap()
+            .part_sig
+            .unwrap();
 
-        // Finally we extract x from the signatures
-        let s_fin = sig_extract_s(&fin_sig, &self.core.secp);
-        let s_bob_apt = sig_extract_s(&apt_sig_bob, &self.core.secp);
-        let s_alice = sig_extract_s(&sig_alice, &self.core.secp);
-        let mut s_alice_neg = s_alice.clone();
-        s_alice_neg.neg_assign(&self.core.secp).unwrap();
-        let mut s_bob = s_fin.clone();
-        s_bob.add_assign(
-            &self.core.secp, 
-            &s_alice_neg
-        ).unwrap();
-        let mut s_bob_neg = s_bob.clone();
-        s_bob_neg.neg_assign(&self.core.secp).unwrap();
-        let mut x = s_bob_apt.clone();
-        x.add_assign(
-            &self.core.secp,
-            &s_bob_neg 
-        ).unwrap();
+        let x = self.core.ext_witness(sig_bob, apt_sig_bob);
 
         Ok(ContractMwResult{
             tx : final_slate,
-            coin : dspend_coins_result.change_coin.unwrap(),
+            coin : dspend_coins_result.change_coin,
             x : x
         })
     }
@@ -436,7 +429,7 @@ impl GrinTx {
         send_msg(stream, &tx);
         Ok(ContractMwResult{
             tx : fin_tx_result,
-            coin : rec_coins_result.output_coin,
+            coin : Some(rec_coins_result.output_coin),
             x : x
         })
     }

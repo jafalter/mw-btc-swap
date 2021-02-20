@@ -5,6 +5,7 @@ use grin_core::core::transaction::OutputFeatures;
 use grin_core::core::{transaction::FeeFields, KernelFeatures};
 use grin_core::core::{Input, Inputs, Output, Transaction};
 use grin_core::libtx::tx_fee;
+use std::convert::TryFrom;
 use grin_keychain::{BlindSum, BlindingFactor, ExtKeychain, Identifier, Keychain};
 use grin_util::secp::pedersen::Commitment;
 use grin_util::secp::{
@@ -116,7 +117,7 @@ impl GrinCore {
             Err(String::from("No inputs provided"))
         } else if fund_value <= 0 {
             Err(String::from("Invalid parameters for fund_value provided"))
-        } else if inpval < (fund_value + fee) {
+        } else if num_of_outputs > 1 && inpval < (fund_value + fee) || inpval < fund_value  {
             Err(String::from(
                 "Spend coins function failed, input coins do not have enough value",
             ))
@@ -134,8 +135,6 @@ impl GrinCore {
             let mut blind_sum = BlindSum::new();
             let offset =
                 BlindingFactor::from_secret_key(create_secret_key(&mut self.rng, &self.secp));
-            let out_bf = BlindingFactor::from_secret_key(change_coin_key.clone());
-            blind_sum = blind_sum.add_blinding_factor(out_bf);
 
             let fee_field = FeeFields::new(0, fee).unwrap();
             let mut tx = Transaction::empty();
@@ -155,24 +154,24 @@ impl GrinCore {
             }
             let inputs = Inputs::FeaturesAndCommit(inp_vector);
             tx = Transaction::new(inputs, &tx.body.outputs, tx.body.kernels());
-            let final_bf = self
-                .chain
-                .blind_sum(&blind_sum)
-                .expect("Failure when calculating blinding factor sum");
 
             // Add changecoin output
-            let change_value = inpval - fund_value - fee;
+            let change_value = i64::try_from(inpval).unwrap() - i64::try_from(fund_value).unwrap() - i64::try_from(fee).unwrap();
+            let mut change_value_u64 = 0;
             // Only create an output coin if there is actually a change value
             let mut com: Option<Commitment> = None;
             if change_value > 0 {
+                let out_bf = BlindingFactor::from_secret_key(change_coin_key.clone());
+                blind_sum = blind_sum.add_blinding_factor(out_bf);
+                change_value_u64 = u64::try_from(change_value).unwrap();
                 println!("Creating change coin with value {}", change_value);
                 let commitment = self
                     .secp
-                    .commit(change_value, change_coin_key.clone())
+                    .commit(change_value_u64, change_coin_key.clone())
                     .expect("Failed to create change coin commitment");
                 // Compute bulletproof rangeproof
                 let proof = self.secp.bullet_proof(
-                    change_value,
+                    change_value_u64,
                     change_coin_key.clone(),
                     rew_nonce,
                     prf_nonce,
@@ -185,6 +184,10 @@ impl GrinCore {
             } else {
                 ();
             }
+            let final_bf = self
+                .chain
+                .blind_sum(&blind_sum)
+                .expect("Failure when calculating blinding factor sum");
             tx.offset = offset.clone();
             slate.tx = Some(tx);
             let final_key = final_bf
@@ -212,7 +215,7 @@ impl GrinCore {
             let change_coin_output = if com == None {
                 None
             } else {
-                Some(MWCoin::new(&com.unwrap(), &change_coin_key, change_value))
+                Some(MWCoin::new(&com.unwrap(), &change_coin_key, change_value_u64))
             };
 
             Ok(SpendCoinsResult {
@@ -615,7 +618,7 @@ impl GrinCore {
             .fill_round_2(&self.chain, &out_coin_blind, &sig_nonce)
             .expect("Failed to run fill_round_2 on drecv_coins_r2");
 
-        let coin = MWCoin::new(&com, &out_coin_blind, fund_value);
+        let coin = MWCoin::new(&prf_ctx.commit.clone(), &out_coin_blind, fund_value);
         Ok((
             RecvCoinsResult {
                 slate: slate,
@@ -762,11 +765,13 @@ impl GrinCore {
                     }
                 }
             }
-
+            let j = serde_json::to_string(&slate).unwrap();
+            println!("Final slate {}", j);
             slate
                 .fill_round_2(&self.chain, sec_key, sec_nonce)
                 .expect("Failed to complete round 2 on senders turn");
         }
+        
         if finalize {
             slate
                 .finalize(&self.chain)
@@ -793,7 +798,7 @@ impl GrinCore {
     /// Return the current height of the blockchain
     pub fn get_block_height(&mut self) -> Result<u64,String> {
         let rpc = JsonRpc::new(String::from("2.0"), self.settings.id.clone(), String::from("get_tip"), vec![]);
-        let url = format!("http://{}:{}", self.settings.url, self.settings.port);
+        let url = format!("http://{}:{}/v2/foreign", self.settings.url, self.settings.port);
         let req = self.req_factory.new_json_rpc_request(url, rpc, self.settings.user.clone(), self.settings.pass.clone());
         match req.execute() {
             Ok(x) => {
@@ -823,14 +828,15 @@ impl GrinCore {
     ///
     /// * `tx` the transaction to broadcast
     pub fn push_transaction(&mut self, tx : Transaction) -> Result<(), String> {
-        let str_tx = serde_json::to_string(&tx).unwrap();
         let mut params : Vec<JsonRpcParam> = Vec::new();
-        params.push(JsonRpcParam::String(str_tx));
+        params.push(JsonRpcParam::Tx(tx));
+        params.push(JsonRpcParam::Bool(true));
         let rpc = JsonRpc::new(String::from("2.0"), self.settings.id.clone(), String::from("push_transaction"), params);
-        let url = format!("http://{}:{}", self.settings.url, self.settings.port);
+        let url = format!("http://{}:{}/v2/foreign", self.settings.url, self.settings.port);
         let req = self.req_factory.new_json_rpc_request(url, rpc, self.settings.user.clone(), self.settings.pass.clone());
         match req.execute() {
             Ok(x) => {
+                println!("Respone from Grin node {}", &x.content);
                 let parsed : JsonRPCResponse<PushTransactionResult> = serde_json::from_str(&x.content)
                     .unwrap();
                 if parsed.error.is_some() {
@@ -858,12 +864,10 @@ mod test {
 
     use crate::{grin::grin_core::GrinCore, net::http::{HttpResponse, RequestFactory}, settings};
     use crate::grin::{grin_routines::*, grin_types::MWCoin};
-    use grin_core::{
-        core::{verifier_cache::LruVerifierCache, Weighting},
-        global::{set_local_chain_type, ChainTypes},
-    };
+    use grin_core::{core::{verifier_cache::LruVerifierCache, Weighting}, global::{set_local_chain_type, ChainTypes}, libtx::tx_fee};
     use grin_util::{secp::PublicKey, RwLock};
     use grin_wallet_libwallet::{Slate, Slatepacker, SlatepackerArgs};
+    use crate::bitcoin::btcroutines::{deserialize_priv_key, private_key_from_grin_sk};
 
     #[test]
     fn test_spend_coins() {
@@ -1206,9 +1210,9 @@ mod test {
             blinding_factor: serialize_secret_key(&bf_b),
             value: input_val,
         };
-        let result1 = core.spend_coins(vec![coin_a], fund_value, 0, 2, 3).unwrap();
+        let result1 = core.spend_coins(vec![coin_a], fund_value, 711042, 2, 3).unwrap();
         let result2 = core
-            .d_spend_coins(vec![coin_b], result1.slate, fund_value, 0)
+            .d_spend_coins(vec![coin_b], result1.slate, fund_value, 711042)
             .unwrap();
         let result3 = core.recv_coins(result2.slate, fund_value).unwrap();
         let result4 = core
@@ -1226,6 +1230,72 @@ mod test {
                 result4,
                 &result2.sig_key,
                 &result2.sig_nonce,
+                true,
+                None,
+                None,
+            )
+            .unwrap();
+        let ser = serde_json::to_string(&fin_slate).unwrap();
+        println!("final slate: {}", ser);
+    }
+
+    #[test]
+    fn test_full_flow_dspend_one_output() {
+        set_local_chain_type(ChainTypes::AutomatedTesting);
+        let fund_value = grin_to_nanogrin(2);
+        let fee = tx_fee(1, 1, 1);
+        let contents = fs::read_to_string("config/settings.json")
+            .unwrap();
+        let read_settings = settings::Settings::parse_json_string(&contents);
+        let factory = RequestFactory::new(None);
+        let mut core = GrinCore::new(read_settings.grin, factory);
+
+        // Create some valid input coin
+        let input_val = fund_value + fee;
+        let bf_a = create_secret_key(&mut core.rng, &core.secp);
+        let bf_b = create_secret_key(&mut core.rng, &core.secp);
+        let commit_a = core.secp.commit(input_val, bf_a.clone()).unwrap();
+        let commit_b = core.secp.commit(0, bf_b.clone()).unwrap();
+        let commit = core
+            .secp
+            .commit_sum(vec![commit_a, commit_b], vec![])
+            .unwrap();
+        let coin_a = MWCoin {
+            commitment: serialize_commitment(&commit),
+            blinding_factor: serialize_secret_key(&bf_a),
+            value: input_val,
+        };
+        let coin_b = MWCoin {
+            commitment: serialize_commitment(&commit),
+            blinding_factor: serialize_secret_key(&bf_b),
+            value: input_val,
+        };
+        let result1 = core.spend_coins(vec![coin_a], fund_value, 711042, 1, 3).unwrap();
+        let slate1_str = serde_json::to_string(&result1.slate).unwrap();
+        let slate1 = Slate::deserialize_upgrade(&slate1_str).unwrap();
+        let result2 = core
+            .d_spend_coins(vec![coin_b], slate1, fund_value, 711042)
+            .unwrap();
+        let result3 = core.recv_coins(result2.slate, fund_value).unwrap();
+        let result4 = core
+            .fin_tx(
+                result3.slate,
+                &result2.sig_key,
+                &result2.sig_nonce,
+                false,
+                None,
+                None,
+            )
+            .unwrap();
+        let slate4_str = serde_json::to_string(&result4).unwrap();
+        let mut slate4 = Slate::deserialize_upgrade(&slate4_str).unwrap();
+        slate4.update_kernel().unwrap();
+        let fin_slate = core
+            .fin_tx(
+                slate4,
+
+                &result1.sig_key,
+                &result1.sig_nonce,
                 true,
                 None,
                 None,
@@ -1320,14 +1390,15 @@ mod test {
             .d_spend_coins(vec![coin_b], result1.slate, fund_value, 0)
             .unwrap();
         // Hide a secret x
-        let x = create_secret_key(&mut core.rng, &core.secp);
+        let x_btc = deserialize_priv_key(&String::from("cNScs27pnjxb4GbVbX2124pPUVSPLbjzDtV1frYFZhh9k4zr6uN9"));
+        let x = grin_sk_from_btc_sk(&x_btc, &core.secp);
         let pub_x = PublicKey::from_secret_key(&core.secp, &x).unwrap();
         let result3 = core
             .apt_recv_coins(result2.slate, fund_value, x.clone())
             .unwrap();
         let result4 = core
             .fin_tx(
-                result3.slate,
+                result3.slate.clone(),
                 &result1.sig_key,
                 &result1.sig_nonce,
                 false,
@@ -1347,9 +1418,13 @@ mod test {
             .unwrap();
         let ser = serde_json::to_string(&fin_slate).unwrap();
         println!("final slate: {}", ser);
+        let bob_recv_sig = fin_slate.participant_data.get(2).unwrap().part_sig.unwrap();
+        let bob_apt_sig = result3.slate.participant_data.get(2).unwrap().part_sig.unwrap();
+
         // Extract x from final transaction
-        let x_2 = core.ext_witness(result3.prt_sig.1, result3.prt_sig.0);
-        assert_eq!(x, x_2);
+        let x_2 = core.ext_witness(bob_recv_sig, bob_apt_sig);
+        let x_2_btc = private_key_from_grin_sk(&x_2);
+        assert_eq!(x_btc, x_2_btc);
     }
 
     #[test]
@@ -1361,7 +1436,7 @@ mod test {
         let factory = RequestFactory::new(None);
         let mut core = GrinCore::new(read_settings.grin, factory);
         let slatepack_str = String::from(
-            r#"BEGINSLATEPACK. 2ggbW8PZi5GV1Y5 KTMXbjZUbLTxNDx c2uEp9Jg8F9Qq5i z34zazcL2tA6tHb bqQ3PdSnpEoGEBu fYdLDupQt7psw7q CvC4z7a2c9hXHNa dK4v3YHjKJu6csy LfUYQyQZR5NrtN6 XXDeeEnJyG4xxmZ J2uKaWM4wPBgFsD 6kNN7LbZWKASmMu mLDEJuBhUk1M3Jg 8PQnLvc1UMppzeE jecBThZMWjckUZM yAPzyUqxJSjfqcA BDNfPaFLHbrjCW8 uakuAubanRcXVon tSXn54ikJHd4FdH sZWbnzxu7j2ddG8 J5txMJas. ENDSLATEPACK."#,
+            r#"BEGINSLATEPACK. YKxdYH2hfeRPMxj s6bmkrFVkFsA3sK onQ7aCoEkD9q5M3 TCgRAhhdEjhMdcK HEYn9EBWqCF7WWn AwseQPCMYeKuiW1 8tUbRPHYvv5qiTz 8UnGoSAThv38ais 2kTmoANwCjMujSD 3DSMBrB9EJhoA88 HuEsqKdJqv5bLvC Dcyj63B2JVP5WCR zd5t73y3zGPf4Ew yybS52PZyukcyRn DrhDTJjAmN38GJg t3SiLTNHnhYdvkr kS4GKnHrmQeq4o1 Z9HL1Y9jbzUvC5Q 8TfRpejKQzURNHR CC4Cj9Vax9Przoh a3jwPLB. ENDSLATEPACK."#,
         );
         let packer = Slatepacker::new(SlatepackerArgs {
             sender: None,
@@ -1469,6 +1544,22 @@ mod test {
         // Push transaction
         core.push_transaction(fin_slate.tx.unwrap())
             .unwrap();
+    }
+
+    #[test]
+    fn test_tx_deserialization() {
+        set_local_chain_type(ChainTypes::AutomatedTesting);
+        let contents = fs::read_to_string("config/settings.json")
+            .unwrap();
+        let factory = RequestFactory::new(None);
+        let read_settings = settings::Settings::parse_json_string(&contents);
+        let mut core = GrinCore::new(read_settings.grin, factory);
+        let json = r#"{"ver":"4:3","id":"c880c23d-50df-43fa-ab45-17d6253a9ba3","sta":"S1","off":"659513de52602ae2160865ab18d3b1f07a5afba314ef2f5223b1540e0fc36053","num_parts":3,"amt":"87500000","fee":"12500000","feat":2,"sigs":[{"xs":"02992bb7e5b1df6e892829aec8b8ead73afa6f0748af920720b3a5e4543f7abd79","nonce":"031b570d25adeedf046f8814d2f8f490d29d1966183eb2241d0c8dc75cd99ff5ff","part":"fff59fd95cc78d0c1d24b23e1866199dd290f4f8d214886f04dfeead250d571b39c522ae636072867ebfefd41a0ac3be1b0a2ad913c0188d804b6ad3828d94a7"},{"xs":"02670392c6b08621c81a1432d18e10f87ff60306451ed8704cdd5f4396b9f28645","nonce":"030491c60966dde7eb3ee21c0f5c263cfde8038389bddcb70603f52fb346c2fa48","part":"48fac246b32ff50306b7dcbd898303e8fd3c265c0f1ce23eebe7dd6609c691046cb3398e2ce5a9ea4d358ebfce904e2d7a780391828a33ccc96bb2f72dfc0e27"},{"xs":"024c2cdef09fd7a9231263b593696de798e76857e9ad3061da522d852f78ff23bf","nonce":"02165e981a6428207e70eb86dda47fe73d3e14a4467115f3d55e221262bef72f34","part":"342ff7be6212225ed5f3157146a4143e3de77fa4dd86eb707e2028641a985e169a8ccdd9f407b7fdf3ad10db5db9f5532e8f7aaa66efefeed9910fea3a032fc6"}],"coms":[{"c":"08ca68a97be6bcad3261eb4f629fd812a92c49a0f49782fdb5a9ee3312ea021e07"},{"c":"09fd68cde4bdbfea94d50631b2e588eb4b5e6d03cc2567aba24d9c53f24bfd8579","p":"18335bdd5bab540f5269d977cd24777f836ccf47a073d68ece68ef2108ec956eed9368ae45f26117c2be51f30ab466ee638e29e6624dc2768de7dcf454878a330d30057ab6b14753901b9634c9ea1197fcf83f8e6c4107a7dac537f0a38b634693a91292b617fa8b12832eeef8118b36bbd59d9ff658e31266989a874698c63cdd74709f18d6051c4bc90189d4adcee10835faecc6a17e2d7e467874289c1433b2405cbfbfc6b400c5a018fda2ecc47b9afc67070cae75476e493f00619f89d12483acacf9435b806b8d6b15e4f1e339b3ec24d4828b47a54c55d179ed3a77be12ec7db096fb656a77400e560d183d9696856acf4c81ffdb832a19b7670b9ead46b908a4438ac9fb86945cdb818c4bbb6c744fd3d09404fb7bdb5641d3e1976f22316e2f7b1ddf43f6ac3908d988d4aeded248776a36f491860b97e783ad35501733cf409e97bd8f70d0f3392a174d66dfb433826b6211ce646442b1f7104a85ff6c0176cb0bd3b3dea4258a2680ed3ab60e3669d0d8931adcd35426c092d944c5eda4fd2876ee687686278cbd8f4331da94b1b7d9a4abdfe8f08b374e421e5e98ea63d17486a433c0092d699ca593c1f68f7955eab8748606395f3b0c37e666a3af0d6ed185be39528e7155af715427cdab610eab4abf021c3c31f50dd41be1ec1dc8338267fb3b590680a1968a533897a7a3d903b9f497d37544465feda8b258c25cbdbe2f7575617642df37a488a30f5b2a6154869f41fabc2ade3627e3403274d38c093b8c9eb1510edd12d4f3df6c94018ca82996ef3ffca8731477da47d192184807266d139f02dd19a110931c4608ca61c59308e22273b2fefe3baa6364bd89f5bba2a878843447dd528cf996189170d5839d62901940605ce1adb3d289380f318075a144c4900cd3e8db065d6bf5d71e3958bc21c41b7b6b237b6138a71807"}],"feat_args":{"lock_hgt":712110}}"#;
+        let mut slate = Slate::deserialize_upgrade(&json).unwrap();
+        slate.update_kernel().unwrap();
+        slate.finalize(&core.chain).unwrap();
+        let tx = serde_json::to_string(&slate.tx.unwrap()).unwrap();
+        println!("{}", tx);
     }
 
     #[test]
