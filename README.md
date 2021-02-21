@@ -108,16 +108,23 @@ She will then import her grin as following:
 
 ## setup
 
-The setup command will run the setup phase of the protocol. It will first attempt to establish a TCP connection with the second party and first exchange a checksum
-of the public swap file. If the checksum matches they will start the protocol. First of all both parties create and exchange public keys that they want to use on the Bitcoin
-side. The holder of the BTC (in our case Bob) additionally creates a keypair (x, pub_x) where x is the secret witness that the grin holder (Alice) later needs for unlocking the Bitcoin.
-In the next step Bob will create the lock output on the Bitcoin side, which will be redeemable by Alice if she posseses her secret key and x or by Bob after a certain block number. 
-In our example the address is 2NCJDq4YRQ9C83fgvepMqU2D9kE4x7h36Ji. The transaction funding this address is then sent to Bobs connected Bitcoin Core node.
-As we can see here https://live.blockcypher.com/btc-testnet/tx/10536404873e6ae133afde600b5630d6a00f3be0b9dde01a248c6f13a00b3a4b/ 0,000016 BTC has been transferred to the lock by Bob.
-Alice will verify that the funds are locked on the address (which she can compute herself) and once that is done start the protocol for creating the lock coins on the Grin side. Creating the grin transaction requires interaction by both Alice and Bob, again they exchange the necessary information via the already established TCP channel.
-Here we can see the mined transaction on the Grin testnet https://floonet.grinscan.net/block/718594 .
-08c2e1a98f5fd328cc67b7df5ab9fdee9cf0c1c1f166d5d08a02a578945fdf607 is the lock commitment for which Alice and Bob share a part of the blinding factor.
-Now immediatly after they create a second transaction which spends this coin and sends it back to Alice. In fact Alice must nut publish the funding transaction to the network before this refunding transaction has been completed, othermise her funds might be lost if Bob refused to further cooperate. The refund transaction is saved in Alice's private slate file.
+The setup command will run the setup phase of the protocol. It takes a single mandatory argument:
+
+--swapid <integer> the id of the atomic swap
+
+`./mw-btc-swap accept --swapid 8715159615153475876`
+
+It will first attempt to establish a TCP connection with the second party and exchange a checksum of the public swap file. If the checksum matches they will start the protocol. First of all both parties create and exchange public keys that they want to use on the Bitcoin side. 
+The holder of the BTC (in our case Bob) additionally creates a keypair (`x`, `pub_x`) where `x` is the secret witness that the grin holder (Alice) later needs for unlocking the Bitcoin.
+In the next step Bob will create the lock output on the Bitcoin side, which will be redeemable by Alice if she posseses her secret key and `x` or by Bob after a certain block number. 
+In our example the address is [2NCJDq4YRQ9C83fgvepMqU2D9kE4x7h36Ji](https://live.blockcypher.com/btc-testnet/address/2NCJDq4YRQ9C83fgvepMqU2D9kE4x7h36Ji/).
+In the transaction [10536404873e6ae133afde600b5630d6a00f3be0b9dde01a248c6f13a00b3a4b](https://live.blockcypher.com/btc-testnet/tx/10536404873e6ae133afde600b5630d6a00f3be0b9dde01a248c6f13a00b3a4b/) 0.000016 BTC have been transferred to the lock by Bob.
+Alice will verify that the funds are locked on the address (which she can compute herself) and once that is done start the protocol for creating the lock coins on the Grin side. Creating the Grin transaction requires interaction by both Alice and Bob, again they exchange the necessary messages via the already established TCP channel.
+The funding transaction on Grin side was mined in block [718594](https://floonet.grinscan.net/block/718594) on the Grin testnet.
+[08c2e1a98f5fd328cc67b7df5ab9fdee9cf0c1c1f166d5d08a02a578945fdf607](https://floonet.grinscan.net/output/08c2e1a98f5fd328cc67b7df5ab9fdee9cf0c1c1f166d5d08a02a578945fdf6076) is the lock commitment for which Alice and Bob each share a part of the blinding factor.
+Now immediatly after, they create a second transaction which spends this coin and sends it back to Alice as a refund.
+In fact Alice must not publish the funding transaction to the network before this refunding transaction has been completed, othermise her funds might be lost if Bob refused to further cooperate.
+The refund transaction is saved in Alice's private slate file.
 Now with the funds locked on both sides this concludes the setup phase.
 
 The public slate file now looks like this
@@ -227,7 +234,9 @@ Alice private file looks like this:
   }
 }
 ```
-We have spending information for Alice change output on the Grin side, her share of the shared coin, as well as the refund coin spending information in case the swap is cancelled. It also contains the transaction doing the refunding which can be mined after block 718559 on the grin network. The file also contains the secret key used in the Bitcoin lock.
+We have spending information for Alice change output on the Grin side, her share of the shared coin, as well as the refund coin spending information in case the swap is cancelled. 
+It also contains the transaction doing the refunding which can be mined after block 718559 on the grin network. 
+The file also contains the secret key used in the Bitcoin lock.
 On Bobs side the private file looks as follows:
 ```json
 {
@@ -291,14 +300,25 @@ The command takes the following mandatory argument:
 
 --swapid <integer> the id of the atomic swap which we want to start
 
-To be able to run this command the swap has to be first setup using the setup command, the second requirement is that there is enough time left to complete the swap. The code will first check the current height of the networks and cancel if not enough time is left.
-Otherwise the execution will start, Alice and Bob will run the contract protocol on the Grin side to spend the shared coin to Bob while simultaniously revealing `x` to Alice by the use of adapted signatures. Completing this transaction Bob can send it to the Grin network and now being in full possesion of the coins. After receiving `x` Alice can now create the required unlocking script on Bitcoin side. She will create a transaction sending the locked amount to her, signing it with `x` and her secret key `sk_a` and broadcasting it to the network. With Alice now being in full posession of the Bitcoins the swap is finished.
+To be able to run this command the swap has to be first setup using the setup command, the second requirement is that there is enough time left to complete the swap. 
+The program will first verify the current height of the networks and cancel if not enough time is left.
+Not enough time is defined as 1 hour in blocks. (Calculated by average block time)
+If enough time is left the execution will start, Alice and Bob will run the contract protocol on the Grin side to spend the shared coin to Bob while simultaniously revealing `x` to Alice by the use of adapted signatures. 
+Completing this transaction Bob, can send it to the Grin network and now is in full possesion of the coins.
+In our example this transaction was mined on the Grin testnet on block [718596](https://floonet.grinscan.net/block/718596), spending the locked funds to Bob's commitment {[09ef66334dc2e4c74732dafda8af3c32494eed5b23beb483d29d7ef32bf5c3ebb8](https://floonet.grinscan.net/output/09ef66334dc2e4c74732dafda8af3c32494eed5b23beb483d29d7ef32bf5c3ebb8).
+After receiving `x` Alice can now create the required unlocking script on Bitcoin side. 
+She will create a transaction sending the locked amount to her, signing it with both `x` and her secret key `sk_a` and broadcast the transaction to the network. 
+With Alice now being in full possession of the Bitcoins, the swap is finished.
+The redeem transaction on Bitcoin side is [aa2ab77482841571b6413c68de681830c61527bc6a90ef1781d6208d151fea10](https://live.blockcypher.com/btc-testnet/tx/aa2ab77482841571b6413c68de681830c61527bc6a90ef1781d6208d151fea10/), spending the locked funds to [n4pc2fJMqUzy6rivF8gKZy5eBXvDqvHvzo](https://live.blockcypher.com/btc-testnet/tx/aa2ab77482841571b6413c68de681830c61527bc6a90ef1781d6208d151fea10/) which is controlled by Alice.
 
 ## cancel
 
 In the case that the setup phase of the Atomic Swap protocol was already finished, but the execute was not yet run, both parties have the option to cancel the swap. However, this will only work after the respective timeout has been reached on both chains!
 The command takes the following mandatory argument:
 
+--swapid <integer> the id of the atomic swap which we want to start
+
 `./mw-btc-swap cancel --swapid 8715159615153475876`
 
-It will again connect to Bob via TCP to initiate the cancellation of the swap. In this case Alice will simply publish the refund Grin transaction, which she already has. Bob will create a Bitcoin transaction spending the locked coins to himself while signing with his refund key.
+It will again connect to Bob via TCP to initiate the cancellation of the swap. In this case Alice will simply publish the refund Grin transaction, which she already has. 
+Bob will create a Bitcoin transaction spending the locked coins to himself while signing with his refund key.
