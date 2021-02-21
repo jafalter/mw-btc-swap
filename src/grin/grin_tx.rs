@@ -354,12 +354,6 @@ impl GrinTx {
             Some(pub_x), 
             None
         )?;
-        let sig_alice = fin_tx_result
-            .participant_data
-            .get(0)
-            .unwrap()
-            .part_sig
-            .unwrap();
         // Send ptx3 to Bob which he should then complete into the final tx
         let ptx3 = serde_json::to_string(&fin_tx_result)
             .unwrap();

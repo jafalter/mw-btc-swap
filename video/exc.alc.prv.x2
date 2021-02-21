@@ -1,0 +1,83 @@
+{
+  "mw": {
+    "inputs": [
+      {
+        "commitment": "0942baf086436b2d0dfd986a3430fba1f8a38574a7d35b1e182d9b1dbe00ffdf23",
+        "blinding_factor": "dcd7594b26ba36c18e97bfcc81b4cfc345c68110301a5ded97cf4361120889a5",
+        "value": 1166000000
+      }
+    ],
+    "partial_key": 0,
+    "shared_coin": {
+      "commitment": "08c2e1a98f5fd328cc67b7df5ab9fdee9cf0c1c1f166d5d08a02a578945fdf6076",
+      "blinding_factor": "f2e8508b4128f12dca39d2c31fbcde218f42e716597e9f8ad0e8ef8e782d5f8e",
+      "value": 100000000
+    },
+    "change_coin": {
+      "commitment": "081577517c9c643f7a4d640acc1509b063c08ce3efcd93465a97f3d1a27efbe8e5",
+      "blinding_factor": "95cb10df2aedc380edc17eb384b517fa83f4cd7efc4bd350f96b27b4ad1f32bb",
+      "value": 1043000000
+    },
+    "refund_coin": {
+      "commitment": "08e2a40b0e56d51a6c33d0f1547c8051192576282ce2e4a3f58d323ebb96dc2eee",
+      "blinding_factor": "5e3eef2fab9359143bf86e4f8f29dc17c66260a02c60d4c71cf6cba4fd9b454d",
+      "value": 87500000
+    },
+    "swapped_coin": null,
+    "refund_tx": {
+      "offset": "f6d524684dd4432718a7406ecf431088aa9e69d0020c658db798d72bfa908458",
+      "body": {
+        "inputs": [
+          {
+            "features": "Plain",
+            "commit": "08c2e1a98f5fd328cc67b7df5ab9fdee9cf0c1c1f166d5d08a02a578945fdf6076"
+          }
+        ],
+        "outputs": [
+          {
+            "features": "Plain",
+            "commit": "08e2a40b0e56d51a6c33d0f1547c8051192576282ce2e4a3f58d323ebb96dc2eee",
+            "proof": "30e4fa6e77f933b76bea28db893dcf703e3debca988bdd7392a86880ca64caa60fc96a072868f8675356155f34617426cf95c1100577ef2983f304902c4243810b27850ca74e7c78a1968bbb1227cc978b46d1c9b015c5bc7f65c84e2917ae98ddd1544011172f9257054d9a42f26fc72c483ce423e5069a41260b04a648938de614b946019db2ad86424a177c42d368dd12ee143671e4c987c52fc23986c2ebca3877f5f12c75d11dcc7e5b259eb180c58d33bbbdac7eb69a1188427d53ab0edf8998e7b536861c41d54d6f75198130d0d9eec210875f81040cfa2f8a4edda3f34f9789f37590db00395091e89c1dbc1929550d5a9c3d3a00cbd12df85db52dd5c8da9de5486879f8cd19fd0cf37df293bdc2778ff0056d6b49ff14c390b7281bb9b20e8a27ad4176f70f146b9b8a9aada7b089b7a4947a133c07910565751769f1112b47920aab3921b71d3727cecde813bd26e406e7d83bafb238e27dea220fd303513f13f8f8fb132f0026de46516b987cc7adee99912fc282aa5b96734f00feacfafa7c7183ddca1928c23bace6bb737a7224625523d3d59a9c33e63e336b2d9e9646cc71a77153db5c2c58792594bda3ba62cd0bbb6da3263dbfec64bc0a899010097fba0674c2004885f12448e18df4b3869a64c871df58df10924d79016139a2ba576f6bbb42a90637e45f06170e8e848ba8b08671d8f3425da112d74f34a31d572c317005bbc61f2768f28a115da31c57d05b7cc17a50d41610bab1d9dcbb82f5749e9c8c324f7d435828b03f67450b0b316a0865c632d9a58b867f231ed518ed891ce0bd603f12edfae04cd029ba9462e44551631f68eca9a3bbdeb4aa837fe2095a0575e91aa14149cd056b7e9705a4af4b02169702f710e82b29fa30334c8caaed8ae31433f91b6c2ff777bb083705293423c82be870e1710e84deb1e1"
+          }
+        ],
+        "kernels": [
+          {
+            "features": {
+              "HeightLocked": {
+                "fee": 12500000,
+                "lock_height": 719193
+              }
+            },
+            "excess": "09598bad8406e4c1bcfcd840933c360ede36cc01667951e570ba19b615d7e30978",
+            "excess_sig": "4d2fb335cfdd3161a1a7ffd50c8cdc15d068fa06564d5ac161a68634337b6fd854954da60b38c76e688fb8ae08e692cb16fdfb747a9d1afc11e693caaba82c56"
+          }
+        ]
+      }
+    }
+  },
+  "btc": {
+    "inputs": [],
+    "witness": 0,
+    "sk": "cNbi8nGFBnVtoYxzEANQU4CKAQ6K67vZQPNe81RNdEcPEwW65rWY",
+    "x": null,
+    "r_sk": null,
+    "change": null,
+    "swapped": {
+      "txid": "aa2ab77482841571b6413c68de681830c61527bc6a90ef1781d6208d151fea10",
+      "vout": 0,
+      "value": 1100,
+      "secret": "cTYVv2cqBxKZ9uJq1QNgU314gPfXPKCwZAw1VfM2NDKx1rZTpu9e",
+      "pub_key": "025a60210acdb9bdeab428ed90435658850255a630db5ecf96d3a19453e458b0ca",
+      "pub_script": "76a914ffa176b1195ae9cfd96a46db15f42c7b07a07ee688ac"
+    },
+    "lock": {
+      "txid": "10536404873e6ae133afde600b5630d6a00f3be0b9dde01a248c6f13a00b3a4b",
+      "vout": 0,
+      "value": 1600,
+      "secret": "cNbi8nGFBnVtoYxzEANQU4CKAQ6K67vZQPNe81RNdEcPEwW65rWY",
+      "pub_key": "03dce04d93274c2990e43655fa599f5434971bb6a06251f40d85f9ee8ecc2500f7",
+      "pub_script": "a914d0fb814aee40f3679bdbb57f3adf19b8c33104fc87"
+    },
+    "refunded": null
+  }
+}

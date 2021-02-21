@@ -1,0 +1,49 @@
+{
+  "mw": {
+    "inputs": [],
+    "partial_key": 0,
+    "shared_coin": {
+      "commitment": "0855d1ec1d11aaa1726e5ca53524dc148343a254a71f33324d5d3961e2ebac6e81",
+      "blinding_factor": "f3001625755f9187c8c4369b7763d315fa2532f1b2d7e5e713673d5ca52443f3",
+      "value": 100000000
+    },
+    "change_coin": null,
+    "refund_coin": null,
+    "swapped_coin": null,
+    "refund_tx": null
+  },
+  "btc": {
+    "inputs": [
+      {
+        "txid": "891e27ce988254fc53dd5c67524e3fed1b5864aaccae9f483c046ac1da05622a",
+        "vout": 1,
+        "value": 1929577,
+        "secret": "cQauQu4gtfcnJW3nrbKe1Jz9y66G2H2Fme2ScMPvG6L5hKW8fjdA",
+        "pub_key": "026279d52d042833268a9c22194a5fa6ea60ec1dc36106a684567603e6f211f2b6",
+        "pub_script": "76a914baa9a6fbc3658f36643d0a3dc0c8322e5ed7f0b488ac"
+      }
+    ],
+    "witness": 0,
+    "sk": "cRaP4RjfGhRLytSYuEyhacVPG6UwvqMdhtkuwaNG9LRsKEtZE8Ct",
+    "x": "cQPkea4bUkTi9uCLGHPPsXBskHcz8kjpYfGGvAWgy1t2t9NafbdB",
+    "r_sk": "cPYyS85ng2ePmxnBzfc1rRsjK3NtvkmEZNXLHyNMKk3unnPujTjr",
+    "change": {
+      "txid": "b0c9fd94adc501f7332b86ce6e872b0ed4015eaab0564ec2f4106bfdacbce0b1",
+      "vout": 1,
+      "value": 1927477,
+      "secret": "cPYyS85ng2ePmxnBzfc1rRsjK3NtvkmEZNXLHyNMKk3unnPujTjr",
+      "pub_key": "038bc322a744a171ad5945e0bf9a2a317a5acce3ae9e9c315e7dabb690fe943e0d",
+      "pub_script": "76a9142db771d55ec2ec6dfb5ce6ab9542d4e77377137b88ac"
+    },
+    "swapped": null,
+    "lock": {
+      "txid": "b0c9fd94adc501f7332b86ce6e872b0ed4015eaab0564ec2f4106bfdacbce0b1",
+      "vout": 0,
+      "value": 1600,
+      "secret": "cRaP4RjfGhRLytSYuEyhacVPG6UwvqMdhtkuwaNG9LRsKEtZE8Ct",
+      "pub_key": "0333220c416f2489268a6aeccec1080f293c4f2be64a3eb43041582e7ab67eddff",
+      "pub_script": "a914afbb72dceed72da9ecb0bbbf892860b21b9ab99087"
+    },
+    "refunded": null
+  }
+}
