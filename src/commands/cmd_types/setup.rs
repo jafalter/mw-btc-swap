@@ -1,4 +1,4 @@
-use crate::{bitcoin::bitcoin_core::BitcoinCore, enums::SwapStatus, grin::{grin_core::GrinCore, grin_tx::GrinTx}, net::http::RequestFactory, swap::{protocol::exec_phase_swap_btc, protocol::exec_phase_swap_mw, slate::{self, get_slate_checksum, write_slate_to_disk}}};
+use crate::{bitcoin::bitcoin_core::BitcoinCore, enums::SwapStatus, grin::{grin_core::GrinCore, grin_tx::GrinTx}, net::http::RequestFactory, swap::{slate::{get_slate_checksum}}};
 use crate::swap::slate::read_slate_from_disk;
 use rand::rngs::OsRng;
 use bitcoin::secp256k1::Secp256k1;

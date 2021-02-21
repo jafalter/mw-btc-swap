@@ -71,7 +71,8 @@ impl Command for Init {
                 r_sk : None,
                 change : None,
                 swapped : None,
-                lock : None
+                lock : None,
+                refunded : None
             };
             let prv_slate = SwapSlatePriv{
                 mw : mwpriv,

@@ -50,7 +50,7 @@ impl Command for Execute {
                 send_msg(&mut stream, &String::from("EXECUTE"));
                 if slate.pub_slate.btc.swap_type == SwapType::OFFERED {
                     // Offered value is btc, requested is grin
-                    exec_phase_swap_mw(&mut slate, &mut stream, &mut btc_core, rng, &mut grin_tx, &grin_secp, btc_secp)?;
+                    exec_phase_swap_mw(&mut slate, &mut stream, &mut btc_core, rng, &mut grin_tx, &mut grin_core, &grin_secp, btc_secp)?;
                     Ok(slate)
                 }
                 else {

@@ -1,4 +1,4 @@
-use crate::{bitcoin::{bitcoin_types::BTCInput, btcroutines::{create_private_key, create_spend_lock_transaction, deserialize_priv_key, deserialize_pub_key, deserialize_script, private_key_from_grin_sk, serialize_priv_key, serialize_pub_key, sign_lock_transaction_redeemer, sign_lock_transaction_refund, sign_p2pkh_transaction}}, grin::grin_routines::{deserialize_grin_pub_key, deserialize_secret_key, estimate_fees, grin_pk_from_btc_pk, grin_sk_from_btc_sk}};
+use crate::{bitcoin::{bitcoin_types::BTCInput, btcroutines::{create_private_key, create_spend_lock_transaction, deserialize_priv_key, deserialize_pub_key, deserialize_script, private_key_from_grin_sk, serialize_priv_key, serialize_pub_key, serialize_script, sign_lock_transaction_redeemer, sign_lock_transaction_refund, sign_p2pkh_transaction}}, constants::{BTC_BLOCK_TIME, GRIN_BLOCK_TIME}, grin::grin_routines::{deserialize_grin_pub_key, deserialize_secret_key, estimate_fees, grin_pk_from_btc_pk, grin_sk_from_btc_sk}};
 use crate::net::tcp::send_msg;
 use crate::SwapSlate;
 use crate::{
@@ -291,52 +291,57 @@ pub fn exec_phase_swap_mw(
     btc_core: &mut BitcoinCore,
     rng: &mut OsRng,
     grin_tx: &mut GrinTx,
+    grin_core: &mut GrinCore,
     grin_secp: &GrinSecp256k1,
     btc_secp: &Secp256k1<All>,
 ) -> Result<(), String> {
-    set_local_chain_type(grin_core::global::ChainTypes::Testnet);
-    slate.pub_slate.status = crate::enums::SwapStatus::EXECUTING;
-    println!("Running Atomic Swap execution phase on mimblewimble side");
-    let shared_coin = slate.prv_slate.mw.shared_coin.clone().unwrap();
-    let value = shared_coin.value;
-    let pub_x = deserialize_pub_key(&slate.pub_slate.btc.pub_x.clone().unwrap());
-    let pub_x_grin = grin_pk_from_btc_pk(&pub_x, grin_secp);
+    if check_if_enough_time(grin_core, btc_core, slate) {
+        set_local_chain_type(grin_core::global::ChainTypes::Testnet);
+        slate.pub_slate.status = crate::enums::SwapStatus::EXECUTING;
+        println!("Running Atomic Swap execution phase on mimblewimble side");
+        let shared_coin = slate.prv_slate.mw.shared_coin.clone().unwrap();
+        let value = shared_coin.value;
+        let pub_x = deserialize_pub_key(&slate.pub_slate.btc.pub_x.clone().unwrap());
+        let pub_x_grin = grin_pk_from_btc_pk(&pub_x, grin_secp);
 
-    println!("Running Mimblewimble Contract transaction protocol");
-    let fee = estimate_fees(1, 1, 1);
-    let fund_value = value - fee;
-    let result = grin_tx.dcontract_mw_tx_alice(shared_coin, fund_value, 0, pub_x_grin, stream)?;
-    
-    let sk_a2 = create_private_key(rng);
-    let pub_a2 = PublicKey::from_private_key(btc_secp, &sk_a2);
+        println!("Running Mimblewimble Contract transaction protocol");
+        let fee = estimate_fees(1, 1, 1);
+        let fund_value = value - fee;
+        let result = grin_tx.dcontract_mw_tx_alice(shared_coin, fund_value, 0, pub_x_grin, stream)?;
+        
+        let sk_a2 = create_private_key(rng);
+        let pub_a2 = PublicKey::from_private_key(btc_secp, &sk_a2);
 
-    let pub_a = deserialize_pub_key(&slate.pub_slate.btc.pub_a.clone().unwrap());
-    let pub_b = deserialize_pub_key(&slate.pub_slate.btc.pub_b.clone().unwrap());
-    let pub_x = deserialize_pub_key(&slate.pub_slate.btc.pub_x.clone().unwrap());
+        let pub_a = deserialize_pub_key(&slate.pub_slate.btc.pub_a.clone().unwrap());
+        let pub_b = deserialize_pub_key(&slate.pub_slate.btc.pub_b.clone().unwrap());
+        let pub_x = deserialize_pub_key(&slate.pub_slate.btc.pub_x.clone().unwrap());
 
-    let x_btc = private_key_from_grin_sk(&result.x);
-    println!("Extracted x value: {}", serialize_priv_key(&x_btc));
+        let x_btc = private_key_from_grin_sk(&result.x);
+        println!("Extracted x value: {}", serialize_priv_key(&x_btc));
 
-    let sk_a = deserialize_priv_key(&slate.prv_slate.btc.sk.clone().unwrap());
+        let sk_a = deserialize_priv_key(&slate.prv_slate.btc.sk.clone().unwrap());
 
-    println!("Creating Bitcoin redeem transaction");
-    // Now we can spent the Bitcoin
-    let redeem_tx = create_spend_lock_transaction(&pub_a2, slate.prv_slate.btc.lock.clone().unwrap(), slate.pub_slate.btc.amount, BTC_FEE, 0)?;
-    let lock_script = get_lock_pub_script(pub_a, pub_x, pub_b, slate.pub_slate.btc.lock_time.unwrap(), false);
-    let signed_redeem_tx = sign_lock_transaction_redeemer(redeem_tx, 0, lock_script, sk_a, x_btc, btc_secp);
-    let o = signed_redeem_tx.output.get(0).unwrap();
-    let txid = signed_redeem_tx.txid().to_string();
-    btc_core.send_raw_transaction(signed_redeem_tx.clone())?;
-    slate.prv_slate.btc.swapped = Some(BTCInput::new2(txid, 
-    0, 
-    o.value, 
-    sk_a2, 
-    pub_a2, 
-    o.script_pubkey.clone()));
-    println!("Successfully completed Atomic Swap on Mimblewimble side");
-    slate.pub_slate.status = crate::enums::SwapStatus::FINISHED;
+        println!("Creating Bitcoin redeem transaction");
+        // Now we can spent the Bitcoin
+        let redeem_tx = create_spend_lock_transaction(&pub_a2, slate.prv_slate.btc.lock.clone().unwrap(), slate.pub_slate.btc.amount, BTC_FEE, 0)?;
+        let lock_script = get_lock_pub_script(pub_a, pub_x, pub_b, slate.pub_slate.btc.lock_time.unwrap(), false);
+        let signed_redeem_tx = sign_lock_transaction_redeemer(redeem_tx, 0, lock_script, sk_a, x_btc, btc_secp);
+        let o = signed_redeem_tx.output.get(0).unwrap();
+        let txid = signed_redeem_tx.txid().to_string();
+        btc_core.send_raw_transaction(signed_redeem_tx.clone())?;
+        slate.prv_slate.btc.swapped = Some(BTCInput::new2(txid, 
+        0, 
+        o.value, 
+        sk_a2, 
+        pub_a2, 
+        o.script_pubkey.clone()));
+        println!("Successfully completed Atomic Swap on Mimblewimble side");
+        slate.pub_slate.status = crate::enums::SwapStatus::FINISHED;
 
-    Ok(())
+        Ok(())
+    } else {
+        Err(String::from("Not enough time left to execute atomic swap"))
+    }
 }
 
 /// Executing the Atomic Swap on Bitcoin (owning) side
@@ -359,17 +364,128 @@ pub fn exec_phase_swap_btc(
     secp: &GrinSecp256k1,
 ) -> Result<(), String> {
     set_local_chain_type(grin_core::global::ChainTypes::Testnet);
-    slate.pub_slate.status = crate::enums::SwapStatus::EXECUTING;
-    let shared_coin = slate.prv_slate.mw.shared_coin.clone().unwrap();
-    let value = shared_coin.value;
-    let x = deserialize_priv_key(&slate.prv_slate.btc.x.clone().unwrap());
-    let x_grin = grin_sk_from_btc_sk(&x, secp);
-    let fee = estimate_fees(1, 1, 1);
-    let fund_value = value - fee;
-    let result = grin_tx.dcontract_mw_tx_bob(shared_coin, fund_value, 0, x_grin, stream)?;
-    slate.prv_slate.mw.swapped_coin = result.coin;
-    grin_core.push_transaction(result.tx.tx.unwrap())?;
-    slate.pub_slate.status = crate::enums::SwapStatus::FINISHED;
+    if check_if_enough_time(grin_core, btc_core, slate) {
+        slate.pub_slate.status = crate::enums::SwapStatus::EXECUTING;
+        let shared_coin = slate.prv_slate.mw.shared_coin.clone().unwrap();
+        let value = shared_coin.value;
+        let x = deserialize_priv_key(&slate.prv_slate.btc.x.clone().unwrap());
+        let x_grin = grin_sk_from_btc_sk(&x, secp);
+        let fee = estimate_fees(1, 1, 1);
+        let fund_value = value - fee;
+        let result = grin_tx.dcontract_mw_tx_bob(shared_coin, fund_value, 0, x_grin, stream)?;
+        slate.prv_slate.mw.swapped_coin = result.coin;
+        grin_core.push_transaction(result.tx.tx.unwrap())?;
+        slate.pub_slate.status = crate::enums::SwapStatus::FINISHED;
+        Ok(())
+    } else {
+        Err(String::from("Not enough time left to execute atomic swap"))
+    }
+}
 
-    Ok(())
+/// Refund coins to the original owner
+/// Sends refund transaction to grin
+///
+/// # Arguments
+///
+/// * `slate` Atomic Swap Slate
+/// * `btc_core` Bitcoin core node functionality
+/// * `grin_core` Grin core node functionality
+pub fn refund_phase_swap_mw(
+    slate: &mut SwapSlate,
+    btc_core: &mut BitcoinCore,
+    grin_core: &mut GrinCore
+) -> Result<(), String> {
+    if can_refund(grin_core, btc_core, slate) {
+        let refund_tx = slate.prv_slate.mw.refund_tx.clone().unwrap();
+        grin_core.push_transaction(refund_tx)?;
+        slate.pub_slate.status = crate::enums::SwapStatus::FAILED;
+        Ok(())
+    } else {
+        Err(String::from("Can't refund yet, too early"))
+    }
+}
+
+/// Refund coins to the original owner
+/// Sends transaction to bitcoin core to refund the locked bitcoin
+///
+/// # Arguments
+///
+/// * `slate` Atomic Swap Slate
+/// * `btc_core` Bitcoin core node functionality
+/// * `grin_core` Grin core node functionality
+/// * `rng` randomness tape
+pub fn refund_phase_swap_btc(
+    slate: &mut SwapSlate,
+    btc_core: &mut BitcoinCore,
+    grin_core: &mut GrinCore,
+    btc_secp: &Secp256k1<All>,
+    rng: &mut OsRng
+) -> Result<(), String> {
+    if can_refund(grin_core, btc_core, slate) {
+        let sk = create_private_key(rng);
+        let pk = PublicKey::from_private_key(btc_secp, &sk);
+
+        let pub_a = deserialize_pub_key(&slate.pub_slate.btc.pub_a.clone().unwrap());
+        let sk_b = deserialize_priv_key(&slate.prv_slate.btc.sk.clone().unwrap());
+        let x = deserialize_priv_key(&slate.prv_slate.btc.x.clone().unwrap());
+        let pub_b = PublicKey::from_private_key(btc_secp, &sk_b);
+        let pub_x = PublicKey::from_private_key(btc_secp, &x);
+
+        let redeem_tx = create_spend_lock_transaction(&pk, slate.prv_slate.btc.lock.clone().unwrap(), slate.pub_slate.btc.amount, BTC_FEE, 0)?;
+        let lock_script = get_lock_pub_script(pub_a, pub_x, pub_b, slate.pub_slate.btc.lock_time.unwrap(), false);
+
+        let final_amount = slate.pub_slate.btc.amount - BTC_FEE;
+        let signed_tx = sign_lock_transaction_refund(redeem_tx, 0, lock_script, sk_b, btc_secp);
+        btc_core.send_raw_transaction(signed_tx.clone())?;
+        let o = signed_tx.output.get(0).unwrap();
+        slate.prv_slate.btc.refunded = Some(BTCInput{
+            txid : signed_tx.clone().txid().to_string(),
+            vout : 0,
+            value : o.value,
+            secret : serialize_priv_key(&sk),
+            pub_key : serialize_pub_key(&pk),
+            pub_script : serialize_script(&o.script_pubkey)
+        });
+        slate.pub_slate.status = crate::enums::SwapStatus::FAILED;
+
+        Ok(())
+    } else {
+        Err(String::from("Can't refund yet, too early"))
+    }
+}
+
+/// Query current block heights to see if enough time is left to complete the swap
+/// Will return true if yes, false otherwise. Enough time is given if there
+/// is at least 1 hour left in average block length
+///
+/// # Arguments
+///
+/// * `grin_core` Grin core node functions
+/// * `btc_core` Bitcoin core node functions
+/// * `slate` Swap slate
+fn check_if_enough_time(grin_core : &mut GrinCore, btc_core : &mut BitcoinCore, slate : &SwapSlate) -> bool {
+    let locktime_grin = slate.pub_slate.mw.lock_time.unwrap();
+    let locktime_btc = slate.pub_slate.btc.lock_time.unwrap();
+
+    let block_height_grin = grin_core.get_block_height().unwrap();
+    let block_height_btc = btc_core.get_current_block_height().unwrap();
+
+    return ( (block_height_grin + ( 60 / GRIN_BLOCK_TIME )) <= u64::try_from(locktime_grin).unwrap() ) && ( (block_height_btc + ( 60 / BTC_BLOCK_TIME )) <= u64::try_from(locktime_btc).unwrap() )
+}
+
+/// If block times have passed the respective lock times we can refund
+///
+/// # Arguments
+///
+/// * `grin_core` Grin core node functions
+/// * `btc_core` Bitcoin core node functions
+/// * `slate` Swap slate
+fn can_refund(grin_core : &mut GrinCore, btc_core : &mut BitcoinCore, slate : &SwapSlate) -> bool {
+    let locktime_grin = slate.pub_slate.mw.lock_time.unwrap();
+    let locktime_btc = slate.pub_slate.btc.lock_time.unwrap();
+
+    let block_height_grin = grin_core.get_block_height().unwrap();
+    let block_height_btc = btc_core.get_current_block_height().unwrap();
+
+    return ( block_height_grin > u64::try_from(locktime_grin).unwrap() ) && ( block_height_btc > u64::try_from(locktime_btc).unwrap() )
 }

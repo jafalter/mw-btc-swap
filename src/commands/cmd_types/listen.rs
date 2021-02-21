@@ -1,5 +1,7 @@
 use crate::{bitcoin::bitcoin_core::BitcoinCore, enums::SwapStatus, grin::{grin_core::GrinCore, grin_tx::GrinTx}, net::http::RequestFactory, swap::{protocol::{exec_phase_swap_btc, exec_phase_swap_mw, setup_phase_swap_mw}, slate}};
 use crate::swap::protocol::setup_phase_swap_btc;
+use crate::swap::protocol::refund_phase_swap_mw;
+use crate::swap::protocol::refund_phase_swap_btc;
 use crate::net::tcp::send_msg;
 use crate::swap::slate::get_slate_checksum;
 use crate::net::tcp::receive_msg;
@@ -93,11 +95,19 @@ impl Command for Listen {
                                 break;
                             }
                             else {
-                                exec_phase_swap_mw(&mut swp_slate, &mut stream, &mut btc_core, rng, &mut grin_tx, grin_secp, btc_secp)?;
+                                exec_phase_swap_mw(&mut swp_slate, &mut stream, &mut btc_core, rng, &mut grin_tx, &mut grin_core, grin_secp, btc_secp)?;
                                 break;
                             }
                         } else {
-                            // TODO implement cancelling
+                            println!("Cancelling atomic swap...");
+                            if swp_slate.pub_slate.btc.swap_type == SwapType::OFFERED {
+                                refund_phase_swap_btc(&mut swp_slate, &mut btc_core, &mut grin_core, btc_secp, rng)?;
+                                break;
+                            }
+                            else {
+                                refund_phase_swap_mw(&mut swp_slate, &mut btc_core, &mut grin_core)?;
+                                break;
+                            }
                         }
                     }
                 }
