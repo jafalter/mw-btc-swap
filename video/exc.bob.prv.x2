@@ -1,0 +1,53 @@
+{
+  "mw": {
+    "inputs": [],
+    "partial_key": 0,
+    "shared_coin": {
+      "commitment": "08c2e1a98f5fd328cc67b7df5ab9fdee9cf0c1c1f166d5d08a02a578945fdf6076",
+      "blinding_factor": "a3ed30df35ab0d6e69aec5f3f4bad101dbb69cf8e1b12cf2c1053e0a70d76635",
+      "value": 100000000
+    },
+    "change_coin": null,
+    "refund_coin": null,
+    "swapped_coin": {
+      "commitment": "09ef66334dc2e4c74732dafda8af3c32494eed5b23beb483d29d7ef32bf5c3ebb8",
+      "blinding_factor": "bf23ea0e420ef40a3a786e6cf148aa9dcd0f9262d1e745c3fac3a58c03cdab14",
+      "value": 87500000
+    },
+    "refund_tx": null
+  },
+  "btc": {
+    "inputs": [
+      {
+        "txid": "b0c9fd94adc501f7332b86ce6e872b0ed4015eaab0564ec2f4106bfdacbce0b1",
+        "vout": 1,
+        "value": 1927477,
+        "secret": "cPYyS85ng2ePmxnBzfc1rRsjK3NtvkmEZNXLHyNMKk3unnPujTjr",
+        "pub_key": "038bc322a744a171ad5945e0bf9a2a317a5acce3ae9e9c315e7dabb690fe943e0d",
+        "pub_script": "76a9142db771d55ec2ec6dfb5ce6ab9542d4e77377137b88ac"
+      }
+    ],
+    "witness": 0,
+    "sk": "cNBU9RVFJ1TDCAzXxFjAfZAjNibhkKodhrPvDKSGUTWTykEjPaKk",
+    "x": "cVWUnfFPg1Jkh3E4zM3fhNb3986Ro2vQgC2tns1xXWBH5vnfnH1f",
+    "r_sk": "cSVtDxDjtB2WSxB7oxqSKZRszcPcMBrgt1QgGipjDkHvwk6qqHSk",
+    "change": {
+      "txid": "10536404873e6ae133afde600b5630d6a00f3be0b9dde01a248c6f13a00b3a4b",
+      "vout": 1,
+      "value": 1925377,
+      "secret": "cSVtDxDjtB2WSxB7oxqSKZRszcPcMBrgt1QgGipjDkHvwk6qqHSk",
+      "pub_key": "03c79ba1652bfaac6a193f4a268b58f3c9cd75f46de6a076f2d274b98c082402ba",
+      "pub_script": "76a914c76412d66e1642f547d43815dc116620ccf3878488ac"
+    },
+    "swapped": null,
+    "lock": {
+      "txid": "10536404873e6ae133afde600b5630d6a00f3be0b9dde01a248c6f13a00b3a4b",
+      "vout": 0,
+      "value": 1600,
+      "secret": "cNBU9RVFJ1TDCAzXxFjAfZAjNibhkKodhrPvDKSGUTWTykEjPaKk",
+      "pub_key": "03107050a891993fcc6d9079fa384dc30f3f86b553219313b9f998fa27617e093b",
+      "pub_script": "a914d0fb814aee40f3679bdbb57f3adf19b8c33104fc87"
+    },
+    "refunded": null
+  }
+}

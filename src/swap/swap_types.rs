@@ -73,4 +73,5 @@ pub struct BTCPriv {
     pub change : Option<BTCInput>,
     pub swapped : Option<BTCInput>,
     pub lock : Option<BTCInput>,
+    pub refunded : Option<BTCInput>
 }

@@ -30,8 +30,8 @@ pub fn write_slate_to_disk(slate : &SwapSlate, directory : &str, wrt_priv: bool,
         File::create(&pb_slate_path).expect("Unable to creat public slate file");
     }
 
-    let ser_prv_slate = serde_json::to_string(&slate.prv_slate).expect("Failed to serialize private slate data");
-    let ser_pub_slate = serde_json::to_string(&slate.pub_slate).expect("Failed to serialize public slate data");
+    let ser_prv_slate = serde_json::to_string_pretty(&slate.prv_slate).expect("Failed to serialize private slate data");
+    let ser_pub_slate = serde_json::to_string_pretty(&slate.pub_slate).expect("Failed to serialize public slate data");
 
     if wrt_priv {
         println!("Writing private slate file to {}", pv_slate_path);
@@ -120,7 +120,8 @@ pub fn create_priv_from_pub(id : u64, directory : &str) -> Result<SwapSlate, &'s
             r_sk : None,
             swapped : None,
             change : None,
-            lock : None
+            lock : None,
+            refunded : None
         };
         let prv_slate = SwapSlatePriv{
             mw : mwpriv,

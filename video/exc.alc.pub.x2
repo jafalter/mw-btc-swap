@@ -1,0 +1,22 @@
+{
+  "status": "FINISHED",
+  "mw": {
+    "amount": 100000000,
+    "timelock": 600,
+    "lock_time": 719193,
+    "swap_type": "REQUESTED"
+  },
+  "btc": {
+    "amount": 1600,
+    "timelock": 60,
+    "swap_type": "OFFERED",
+    "lock_time": 1937207,
+    "pub_a": "03dce04d93274c2990e43655fa599f5434971bb6a06251f40d85f9ee8ecc2500f7",
+    "pub_b": "03107050a891993fcc6d9079fa384dc30f3f86b553219313b9f998fa27617e093b",
+    "pub_x": "0389569a3d9c7e8c4f6a810e954117e7d3177e4e4816b908b7df3be3fbc87183e5"
+  },
+  "meta": {
+    "server": "bob",
+    "port": "80"
+  }
+}
