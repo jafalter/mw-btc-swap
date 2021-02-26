@@ -1,0 +1,11 @@
+BTC:
+Funding transaction:
+https://live.blockcypher.com/btc-testnet/tx/b0c9fd94adc501f7332b86ce6e872b0ed4015eaab0564ec2f4106bfdacbce0b1/
+Refund transaction:
+https://live.blockcypher.com/btc-testnet/tx/fd24d874082c43c07dc66bfb3954f1202f6b945465a3b6cd3fa3eb5b8720b684/
+
+Grin:
+Funding transaction:
+https://floonet.grinscan.net/block/718550 (0855d1ec1d11aaa1726e5ca53524dc148343a254a71f33324d5d3961e2ebac6e81 is the shared commitment)
+Refund transaction:
+https://floonet.grinscan.net/block/718570

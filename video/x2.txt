@@ -1,0 +1,12 @@
+BTC:
+
+funding transaction:
+https://live.blockcypher.com/btc-testnet/tx/10536404873e6ae133afde600b5630d6a00f3be0b9dde01a248c6f13a00b3a4b/
+redeem transaction:
+https://live.blockcypher.com/btc-testnet/tx/aa2ab77482841571b6413c68de681830c61527bc6a90ef1781d6208d151fea10/
+
+MW:
+funding transaction:
+https://floonet.grinscan.net/block/718594 (08c2e1a98f5fd328cc67b7df5ab9fdee9cf0c1c1f166d5d08a02a578945fdf6076 is the shared output)
+redeem transaction:
+https://floonet.grinscan.net/block/718596

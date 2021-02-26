@@ -1,1 +1,6 @@
+Coin I created and was mined 2020-01-18:
 commitment: 09257c975816e6ba6e9a66d1956a202b80d2cd25889a6bef2db0542d51fad6df8e, blinding factor: afa38b309656a60024064b045ce30209c7fd5d406aa2e9216b74287f7425da41, value: 2000000000
+
+Coins created 2020-01-18:
+Sender change coin: commitment: 0897c00ed53b6b760cae69473cbcf65287ed84f89c64bdace053c15b281aa01360, blinding factor: 0ad5a80f5b0cd87ab6b9d1061668be18bb3672336a5bc076eb58caa6330c4b36, value: 1927000000
+Receiver output coin: commitment: 08815e841632d04141e68b66b3bd3d1789fedb05c5702fa0d4b0e71d7f6a0d8ec2, blinding factor: ec0ec1ffceeb6e5e9e7dd90e02cf0c71c05fe3d47d7579f4f3719aaeb942edae, value: 50000000

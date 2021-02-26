@@ -1,4 +1,4 @@
-use grin_core::core::FeeFields;
+use grin_core::{core::FeeFields, libtx::tx_fee};
 use grin_keychain::Identifier;
 use grin_util::secp::{Signature, pedersen::Commitment};
 use grin_util::secp::SecretKey;
@@ -146,11 +146,16 @@ pub fn serialize_secret_key(key: &SecretKey) -> String {
 /// * `key` the key serialized as hex string
 /// * `secp` Secp256 functionatlity
 pub fn deserialize_secret_key(key: &String, secp: &Secp256k1) -> SecretKey {
-    SecretKey::from_slice(
-        secp,
-        &hex::decode(key).expect("Failed to deserialize a secret key from hex string"),
-    )
-    .expect("Failed to deserialize a secret key from hex string")
+    if key == "0000000000000000000000000000000000000000000000000000000000000000" {
+        ZERO_KEY
+    }
+    else {
+        SecretKey::from_slice(
+            secp,
+            &hex::decode(key).expect("Failed to deserialize a secret key from hex string"),
+        )
+        .expect("Failed to deserialize a secret key from hex string")
+    }
 }
 
 //// Create a minimal context object needed for Slate fill_round_1
@@ -358,6 +363,10 @@ pub fn mp_bullet_proof_fin(
     Ok(proof)
 }
 
+pub fn estimate_fees(num_inp : usize, num_out : usize, num_ker : usize) -> u64 {
+    tx_fee(num_inp, num_out, num_ker)
+}
+
 #[cfg(test)]
 mod test {
     use grin_util::secp::{ContextFlag, PublicKey, Secp256k1, SecretKey, pedersen::{Commitment, ProofMessage, ProofRange, RangeProof}};
@@ -439,6 +448,13 @@ mod test {
         assert!(secp
             .verify_bullet_proof(com, proof.clone(), None)
             .is_ok());
+    }
+
+    #[test]
+    pub fn test_deserialize_zero_key() {
+        let secp = Secp256k1::with_caps(ContextFlag::Commit);
+        let hex = String::from("0000000000000000000000000000000000000000000000000000000000000000");
+        let key = deserialize_secret_key(&hex, &secp);
     }
 
 }

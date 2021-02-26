@@ -1,16 +1,20 @@
 use crate::enums::HttpMethod;
+use grin_core::core::Transaction;
 use serde::{Deserialize, Serialize, Serializer, ser::SerializeSeq};
 use std::clone::Clone;
 use std::time::Duration;
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum JsonRpcParam {
     String(String),
     Int(u64),
     Bool(bool),
-    Vec(Vec<String>)
+    Vec(Vec<String>),
+    Tx(Transaction)
 }
 
+/**
 impl Serialize for JsonRpcParam {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -26,9 +30,11 @@ impl Serialize for JsonRpcParam {
                 }
                 seq.end()
             }
+
         }
     }
 }
+ */
 
 #[derive(Serialize, Deserialize)]
 pub struct JsonRpc {

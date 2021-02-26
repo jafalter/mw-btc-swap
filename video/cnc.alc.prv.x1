@@ -1,0 +1,76 @@
+{
+  "mw": {
+    "inputs": [
+      {
+        "commitment": "089fd9f31b23932b8a694b238a22a80f1410bf96e48fbd62d8cda07729b2585c94",
+        "blinding_factor": "42716b7b7fab51df06bac7bac71b89cb44be6ddfa3e7b02a7370afeff3a46d77",
+        "value": 1289000000
+      }
+    ],
+    "partial_key": 0,
+    "shared_coin": {
+      "commitment": "0855d1ec1d11aaa1726e5ca53524dc148343a254a71f33324d5d3961e2ebac6e81",
+      "blinding_factor": "354f7a8fe187247d00abbbbf21809081a82c18ae066601106700cae6f7ec987b",
+      "value": 100000000
+    },
+    "change_coin": {
+      "commitment": "0942baf086436b2d0dfd986a3430fba1f8a38574a7d35b1e182d9b1dbe00ffdf23",
+      "blinding_factor": "dcd7594b26ba36c18e97bfcc81b4cfc345c68110301a5ded97cf4361120889a5",
+      "value": 1166000000
+    },
+    "refund_coin": {
+      "commitment": "084ee621e95240cec68a8bf09e940d4327b6c53120535dfa9e81d524b58cac8141",
+      "blinding_factor": "63cc807ecc7616f00227a0e2eff91c7d3a6381b26ca38b20be1cd4297bb3d4f2",
+      "value": 87500000
+    },
+    "swapped_coin": null,
+    "refund_tx": {
+      "offset": "d40be920f677b8ab60b39db155cb2353dc0ba83c24f7e3b3ca2bac96e4374ae6",
+      "body": {
+        "inputs": [
+          {
+            "features": "Plain",
+            "commit": "0855d1ec1d11aaa1726e5ca53524dc148343a254a71f33324d5d3961e2ebac6e81"
+          }
+        ],
+        "outputs": [
+          {
+            "features": "Plain",
+            "commit": "084ee621e95240cec68a8bf09e940d4327b6c53120535dfa9e81d524b58cac8141",
+            "proof": "7166d04c397b8e2744338fbce7825cdc3bb266e1a3e563fdc568e880cb5b34a44438a539a2b3d5019c35ceeeb12219fe76693774dd6d43b651dd14fc144f0d0c0a8ec28b25087c057d8f8b23ea1a4b8edfc1268b3c8e0394e786aeead245f49a86b25935989b546b51e14097b79ee7dd80c60eccb30e1b4a62c339a726ff44df073bd502f1843cbd76af52718e810df908b5597995250604c7345521a20f66e6658eb6f82d41f155e2c759a7587a41497924d8fc5164abaa4409dc748b47214e948d7d626d846428bb530bbc5d0952783bc2e6e7443b0052f9cf48067814e9ddf4beb60a0a3c921f1f2af4c2969b4a4d5aeeeee54bb91a560c281839f4063b27dab90412908f57206a00596e422e988b9d5b92672a258d615c6c99f550327d518c827f24a1a5c77e6b36551ad2ab4d25b318a5807769176ebfc31e6683eb39c9b617612f897bd02362d46d266721def4aad107704e074ea46a6e80164f30407512430268fc6a4bc852e8fde02516f83416447f3443b725d15d91ae9a49c913daa96a52587e4ce492cd46ad6fbb1421feacbc04971f4f57b8271e05ccbe17e25b80ba316dd029d3f145e1aacbb470f694c25182dde9bd85ddedfbefe553fabf159442da86491f4f5ff4c8bd1e7628ce0ea0ddf273c7918c4fcc22f2117f61c09af7d770d2add882db0401a592770d67bef0e1f4f3afafc8704b3f62095cc61ba9a4baaf2b25823e24182a9fbd86ce3d26dd0a1583348e3d4590865c944cd984fb3f143082cacb5fa97f5d4045d25581b594decb4f45cad5f0077424f11c225b055e9df2e338d25dde5c2d6f117263eef52a7898ac8bc97326fc59c238171b4ee7eab48f57d8ee13713cf5f7ce41cfeebc3916419f49e479da4beb9fca8a42fcf252ca8cd7475fba08b82954faf72f2227c067f0e1293e5936a2ce3f06e70c4e3cc3a814"
+          }
+        ],
+        "kernels": [
+          {
+            "features": {
+              "HeightLocked": {
+                "fee": 12500000,
+                "lock_height": 718559
+              }
+            },
+            "excess": "082696db1d8844194c4575e7d8899b5205b5a68036dd68fc4701dc1a87fee47332",
+            "excess_sig": "f545007a2dfb6ef1af91f7c8cd4e26769cdff84ff2d875e911fbf0ff6ff5b476738cf8f2ae8a0880a115640b305aa50455f040c9581a1be7081160253d78cd72"
+          }
+        ]
+      }
+    }
+  },
+  "btc": {
+    "inputs": [],
+    "witness": 0,
+    "sk": "cQUHaGqiKr68gxhKY1jEnq6pek2eR5cUJBfHCvjfbhUVvszuD4Y5",
+    "x": null,
+    "r_sk": null,
+    "change": null,
+    "swapped": null,
+    "lock": {
+      "txid": "b0c9fd94adc501f7332b86ce6e872b0ed4015eaab0564ec2f4106bfdacbce0b1",
+      "vout": 0,
+      "value": 1600,
+      "secret": "cQUHaGqiKr68gxhKY1jEnq6pek2eR5cUJBfHCvjfbhUVvszuD4Y5",
+      "pub_key": "03f74b8534e9d18b7cfede70ba128ffe2f9a34a7bfe0c5fe82cc3389b0b14e0ebd",
+      "pub_script": "a914afbb72dceed72da9ecb0bbbf892860b21b9ab99087"
+    },
+    "refunded": null
+  }
+}

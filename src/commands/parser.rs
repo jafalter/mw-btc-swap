@@ -18,6 +18,8 @@ use clap::{
     ArgMatches
 };
 
+use super::cmd_types::{cancel::Cancel, setup::Setup};
+
 pub fn parse_arguments(matches: ArgMatches) -> Result<Box<dyn Command>, &'static str> {
     match matches.subcommand() {
         ("init", Some(args)) => {
@@ -88,21 +90,35 @@ pub fn parse_arguments(matches: ArgMatches) -> Result<Box<dyn Command>, &'static
             let swapid : u64 = swapid_arg.parse::<u64>().unwrap();
 
             Ok(Box::new(Listen::new(swapid)))
-        }
+        },
         ("accept", Some(args)) => {
             let swapid_arg = String::from(args.value_of("swapid").unwrap());
 
             let swapid : u64 = swapid_arg.parse::<u64>().unwrap();
 
             Ok(Box::new(Accept::new(swapid)))
-        }
+        },
+        ("setup", Some(args)) => {
+            let swapid_arg = String::from(args.value_of("swapid").unwrap());
+
+            let swapid : u64 = swapid_arg.parse::<u64>().unwrap();
+
+            Ok(Box::new(Setup::new(swapid)))
+        },
+        ("cancel", Some(args)) => {
+            let swapid_arg = String::from(args.value_of("swapid").unwrap());
+
+            let swapid : u64 = swapid_arg.parse::<u64>().unwrap();
+
+            Ok(Box::new(Cancel::new(swapid)))
+        },
         ("execute", Some(args)) => {
             let swapid_arg = String::from(args.value_of("swapid").unwrap());
 
             let swapid : u64 = swapid_arg.parse::<u64>().unwrap();
 
             Ok(Box::new(Execute::new(swapid)))
-        }
+        },
         _ => Err("Invalid command supplied")
     }
 }
