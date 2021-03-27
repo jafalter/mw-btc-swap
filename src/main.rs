@@ -22,7 +22,7 @@ use settings::Settings;
 use grin_util::secp::{ContextFlag, Secp256k1 as GrinSecp256k1};
 
 fn usage() {
-    println!("usage: init|offer|accept|redeem options");
+    println!("usage: init|accept|import|lock|execute <options>");
 }
 
 /// Setting variables can be overwritten with environment variables
@@ -159,7 +159,7 @@ fn main() {
                                 .takes_value(true)
                             )
                         )
-                        .subcommand(SubCommand::with_name("setup")
+                        .subcommand(SubCommand::with_name("lock")
                             .arg(Arg::with_name("swapid")
                                 .long("swapid")
                                 .required(true)
