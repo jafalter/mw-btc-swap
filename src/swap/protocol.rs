@@ -46,7 +46,7 @@ use std::{net::TcpStream, thread, time::Duration};
 /// * `grin_core` Grin core functions
 /// * `btc_core` Bitcoin core functions
 /// * `grin_tx` Grin transaction functions
-pub fn setup_phase_swap_mw(
+pub fn locking_phase_swap_mw(
     slate: &mut SwapSlate,
     stream: &mut TcpStream,
     rng: &mut OsRng,
@@ -199,7 +199,7 @@ pub fn setup_phase_swap_mw(
 /// * `grin_core` Grin core functions
 /// * `btc_core` Bitcoin core functions
 /// * `grin_tx` Grin transaction functions
-pub fn setup_phase_swap_btc(
+pub fn locking_phase_swap_btc(
     slate: &mut SwapSlate,
     stream: &mut TcpStream,
     rng: &mut OsRng,

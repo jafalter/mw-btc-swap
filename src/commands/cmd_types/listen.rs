@@ -1,5 +1,5 @@
-use crate::{bitcoin::bitcoin_core::BitcoinCore, enums::SwapStatus, grin::{grin_core::GrinCore, grin_tx::GrinTx}, net::http::RequestFactory, swap::{protocol::{exec_phase_swap_btc, exec_phase_swap_mw, setup_phase_swap_mw}, slate}};
-use crate::swap::protocol::setup_phase_swap_btc;
+use crate::{bitcoin::bitcoin_core::BitcoinCore, enums::SwapStatus, grin::{grin_core::GrinCore, grin_tx::GrinTx}, net::http::RequestFactory, swap::{protocol::{exec_phase_swap_btc, exec_phase_swap_mw, locking_phase_swap_mw}, slate}};
+use crate::swap::protocol::locking_phase_swap_btc;
 use crate::swap::protocol::refund_phase_swap_mw;
 use crate::swap::protocol::refund_phase_swap_btc;
 use crate::net::tcp::send_msg;
@@ -79,11 +79,11 @@ impl Command for Listen {
                     if swp_slate.pub_slate.status == SwapStatus::INITIALIZED {
                         // Run the setup phase
                         if swp_slate.pub_slate.btc.swap_type == SwapType::OFFERED {
-                            setup_phase_swap_btc(&mut swp_slate, &mut stream, rng, &btc_secp, &mut grin_core, &mut btc_core, &mut grin_tx)?;
+                            locking_phase_swap_btc(&mut swp_slate, &mut stream, rng, &btc_secp, &mut grin_core, &mut btc_core, &mut grin_tx)?;
                             break;
                         }
                         else {
-                            setup_phase_swap_mw(&mut swp_slate, &mut stream, rng, &btc_secp, &mut grin_core, &mut btc_core, &mut grin_tx)?;
+                            locking_phase_swap_mw(&mut swp_slate, &mut stream, rng, &btc_secp, &mut grin_core, &mut btc_core, &mut grin_tx)?;
                             break;
                         }
                     }

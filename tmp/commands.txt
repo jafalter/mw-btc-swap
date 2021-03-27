@@ -8,5 +8,5 @@ Alice:
 
 ./mw-btc-swap accept --swapid 14060548845288543471
 ./mw-btc-swap import grin --swapid 14060548845288543471 --commitment 09c467696dd682cfc1c0769fd3cbaf86d79ed7c22257ff16e25be7cca31acc75e7 --blinding_factor 32276664f7f9e5c1f498b1dd62a1810b96708eccf462107c4af5ebeb12b09a1e --value 920000000
-./mw-btc-swap setup --swapid 14060548845288543471
+./mw-btc-swap lock --swapid 14060548845288543471
 ./mw-btc-swap execute --swapid 14060548845288543471

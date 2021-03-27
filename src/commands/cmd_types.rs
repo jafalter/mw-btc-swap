@@ -6,4 +6,4 @@ pub mod import_grin;
 pub mod init;
 pub mod listen;
 pub mod cancel;
-pub mod setup;
+pub mod lock;

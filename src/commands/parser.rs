@@ -18,7 +18,7 @@ use clap::{
     ArgMatches
 };
 
-use super::cmd_types::{cancel::Cancel, setup::Setup};
+use super::cmd_types::{cancel::Cancel, lock::Lock};
 
 pub fn parse_arguments(matches: ArgMatches) -> Result<Box<dyn Command>, &'static str> {
     match matches.subcommand() {
@@ -98,12 +98,12 @@ pub fn parse_arguments(matches: ArgMatches) -> Result<Box<dyn Command>, &'static
 
             Ok(Box::new(Accept::new(swapid)))
         },
-        ("setup", Some(args)) => {
+        ("lock", Some(args)) => {
             let swapid_arg = String::from(args.value_of("swapid").unwrap());
 
             let swapid : u64 = swapid_arg.parse::<u64>().unwrap();
 
-            Ok(Box::new(Setup::new(swapid)))
+            Ok(Box::new(Lock::new(swapid)))
         },
         ("cancel", Some(args)) => {
             let swapid_arg = String::from(args.value_of("swapid").unwrap());

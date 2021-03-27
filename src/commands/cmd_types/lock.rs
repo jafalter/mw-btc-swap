@@ -10,23 +10,23 @@ use std::net::{TcpStream};
 use crate::net::tcp::send_msg;
 use crate::net::tcp::receive_msg;
 use crate::enums::SwapType;
-use crate::swap::protocol::setup_phase_swap_btc;
-use crate::swap::protocol::setup_phase_swap_mw;
+use crate::swap::protocol::locking_phase_swap_btc;
+use crate::swap::protocol::locking_phase_swap_mw;
 use grin_util::secp::Secp256k1 as GrinSecp256k1;
 
-pub struct Setup {
+pub struct Lock {
     swapid : u64
 }
 
-impl Setup {
-    pub fn new(swapid : u64) -> Setup {
-        Setup {
+impl Lock {
+    pub fn new(swapid : u64) -> Lock {
+        Lock {
             swapid : swapid
         }
     }
 }
 
-impl Command for Setup {
+impl Command for Lock {
     fn execute(&self, settings : &Settings, rng : &mut OsRng, btc_secp : &Secp256k1<All>, grin_secp : &GrinSecp256k1) -> Result<SwapSlate, String> {
         let mut slate : SwapSlate = read_slate_from_disk(self.swapid, &settings.slate_directory)
             .expect("Unable to read slate files from disk");
@@ -50,12 +50,12 @@ impl Command for Setup {
             else {
                 if slate.pub_slate.btc.swap_type == SwapType::OFFERED {
                     // Offered value is btc, requested is grin
-                    setup_phase_swap_mw(&mut slate, &mut stream, rng, &btc_secp, &mut grin_core, &mut btc_core, &mut grin_tx)?;
+                    locking_phase_swap_mw(&mut slate, &mut stream, rng, &btc_secp, &mut grin_core, &mut btc_core, &mut grin_tx)?;
                     Ok(slate)
                 }
                 else {
                     // Offered value is grin, requested is btc
-                    setup_phase_swap_btc(&mut slate, &mut stream, rng, &btc_secp, &mut grin_core, &mut btc_core, &mut grin_tx)?;
+                    locking_phase_swap_btc(&mut slate, &mut stream, rng, &btc_secp, &mut grin_core, &mut btc_core, &mut grin_tx)?;
                     Ok(slate)
                 }
             }
